@@ -1,0 +1,19 @@
+# Directories generated/used by development tools
+.idea/
+.ve/
+.venv/
+.tox/
+.pytest_cache/
+reports/
+build/
+dist/
+
+# Generated files
+src/netsnmpy/version.py
+.coverage
+*.pyc
+*.egg-info/
+*.whl
+*.o
+*.so
+_*.c
