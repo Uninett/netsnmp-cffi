@@ -68,7 +68,7 @@ class SNMPSession:
         self.timeout = timeout
         self.retries = retries
         self.session = None
-        self._opaque_session = None
+        self._original_session = None
 
     def open(self):
         """Opens the SNMP session"""
@@ -88,22 +88,23 @@ class SNMPSession:
         peername = f"{self.host}:{self.port}".encode("utf-8")
         session.peername = _ffi.new("char[]", peername)
 
-        # Net-SNMP's single-session API operates with opaque session pointers
-        opaque_session = _lib.snmp_sess_open(session)
-        if not opaque_session:
+        # Net-SNMP returns a copy of the session struct.  No modifications of the
+        # original session struct will make a difference after this point.
+        session_copy = _lib.snmp_open(session)
+        if not session_copy:
             # TODO: Raise a better exception
             netsnmpy.netsnmp.log_session_error("SNMPSession", session)
-            raise Exception("snmp_sess_open")
-        # original_session = _lib.snmp_sess_session(sessp)
-        self._opaque_session = opaque_session
+            raise Exception("snmp_open")
+        self._original_session = session
+        self.session = session_copy
 
     def close(self):
         """Closes the SNMP session"""
-        if not self._opaque_session:
+        if not self.session:
             return
-        _lib.snmp_sess_close(self._opaque_session)
+        _lib.snmp_close(self.session)
         self.session = None
-        self._opaque_session = None
+        self._original_session = None
 
     def get(self, *oids: OID) -> dict[OID, Union[int, str]]:
         """Performs a synchronous SNMP GET request"""
@@ -113,9 +114,7 @@ class SNMPSession:
             _lib.snmp_add_null_var(request, oid, len(oid))
         response = _ffi.new("netsnmp_pdu**")
         if (
-            code := _lib.snmp_sess_synch_response(
-                self._opaque_session, request, response
-            )
+            code := _lib.snmp_synch_response(self.session, request, response)
         ) != STAT_SUCCESS:
             # TODO: Raise a better exception
             if code == SNMPERR_TIMEOUT:
