@@ -81,12 +81,14 @@ class SNMPSession:
 
         # TODO: This needs to be a bit more complicated for SNMPv3 compatibility:
         community = self.community.encode("utf-8")
-        session.community = _ffi.new("char[]", community)
+        community_c = _ffi.new("char[]", community)
+        session.community = community_c
         session.community_len = len(community)
 
         # TODO: This needs to be a bit more complicated for IPv6 compatibility:
-        peername = f"{self.host}:{self.port}".encode("utf-8")
-        session.peername = _ffi.new("char[]", peername)
+        peername = f"udp:{self.host}:{self.port}".encode("utf-8")
+        peername_c = _ffi.new("char[]", peername)
+        session.peername = peername_c
 
         # Net-SNMP returns a copy of the session struct.  No modifications of the
         # original session struct will make a difference after this point.
