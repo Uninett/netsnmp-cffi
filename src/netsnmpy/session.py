@@ -5,21 +5,24 @@ from typing import Union
 import _netsnmp
 from pysnmp.proto.rfc1905 import VarBindList
 
-import netsnmpy.netsnmp
 from netsnmpy.constants import (
+    SNMP_MSG_GET,
+    SNMP_MSG_GETBULK,
+    SNMP_MSG_GETNEXT,
     SNMP_VERSION_1,
-    SNMP_VERSION_2c,
-    SNMP_VERSION_2u,
     SNMP_VERSION_3,
-    SNMP_VERSION_sec,
+    SNMPERR_TIMEOUT,
+    SNMP_VERSION_2c,
     SNMP_VERSION_2p,
     SNMP_VERSION_2star,
-    SNMP_MSG_GET,
-    SNMPERR_TIMEOUT,
-    SNMP_MSG_GETNEXT,
-    SNMP_MSG_GETBULK,
+    SNMP_VERSION_2u,
+    SNMP_VERSION_sec,
 )
-from netsnmpy.netsnmp import parse_response_variables, make_request_pdu
+from netsnmpy.netsnmp import (
+    log_session_error,
+    make_request_pdu,
+    parse_response_variables,
+)
 from netsnmpy.oids import OID
 
 _ffi = _netsnmp.ffi
@@ -98,7 +101,7 @@ class SNMPSession:
         session_copy = _lib.snmp_open(session)
         if not session_copy:
             # TODO: Raise a better exception
-            netsnmpy.netsnmp.log_session_error("SNMPSession", session)
+            log_session_error("SNMPSession", session)
             raise Exception("snmp_open")
         self._original_session = session
         self.session = session_copy
