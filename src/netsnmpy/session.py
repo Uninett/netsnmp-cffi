@@ -17,6 +17,7 @@ from netsnmpy.constants import (
     SNMP_MSG_GET,
     SNMPERR_TIMEOUT,
     SNMP_MSG_GETNEXT,
+    SNMP_MSG_GETBULK,
 )
 from netsnmpy.netsnmp import oid_to_c, parse_response_variables
 from netsnmpy.oids import OID
@@ -152,8 +153,30 @@ class SNMPSession:
 
         return variables
 
-    def getbulk(self, oid, non_repeaters, max_repetitions):
-        raise NotImplementedError
+    def getbulk(self, *oids: OID, non_repeaters: int = 0, max_repetitions: int = 5):
+        """Performs a synchronous SNMP GET-BULK request"""
+        request = _lib.snmp_pdu_create(SNMP_MSG_GETBULK)
+        for oid in oids:
+            oid = oid_to_c(oid)
+            _lib.snmp_add_null_var(request, oid, len(oid))
+        # These two PDU fields are overloaded for GET-BULK requests
+        request.errstat = non_repeaters
+        request.errindex = max_repetitions
+
+        response = _ffi.new("netsnmp_pdu**")
+        if (
+            code := _lib.snmp_synch_response(self.session, request, response)
+        ) != STAT_SUCCESS:
+            # TODO: Raise a better exception
+            if code == SNMPERR_TIMEOUT:
+                raise TimeoutError("snmp_sess_synch_response")
+            raise Exception(f"snmp_sess_synch_response == {code}")
+        response_pdu = response[0]
+
+        variables = parse_response_variables(response_pdu)
+        _lib.snmp_free_pdu(response_pdu)
+
+        return variables
 
     def walk(self, oid):
         raise NotImplementedError
