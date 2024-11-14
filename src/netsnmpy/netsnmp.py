@@ -2,7 +2,7 @@
 
 import logging
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import Union, List, Any
+from typing import Any, List, Union
 
 from netsnmpy.constants import (
     ASN_APP_DOUBLE,
@@ -212,3 +212,17 @@ def register_log_callback(enable_debug=False):
 def log_session_error(subsystem: str, session: _ffi.CData):
     msg = _ffi.new("char[]", subsystem.encode("utf-8"))
     _lib.snmp_sess_perror(msg, session)
+
+
+def make_request_pdu(operation: int, *oids: OID) -> _ffi.CData:
+    """Creates and returns a new SNMP Request-PDU for the given operation and OIDs.
+
+    The returned struct is allocated/owned by the Net-SNMP library, and will be
+    automatically freed by the library following a successful `snmp_send` call.
+    However, if `snmp_send` fails, the caller is responsible for freeing the PDU.
+    """
+    request = _lib.snmp_pdu_create(operation)
+    for oid in oids:
+        oid = oid_to_c(oid)
+        _lib.snmp_add_null_var(request, oid, len(oid))
+    return request

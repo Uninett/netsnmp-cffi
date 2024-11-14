@@ -19,7 +19,7 @@ from netsnmpy.constants import (
     SNMP_MSG_GETNEXT,
     SNMP_MSG_GETBULK,
 )
-from netsnmpy.netsnmp import oid_to_c, parse_response_variables
+from netsnmpy.netsnmp import parse_response_variables, make_request_pdu
 from netsnmpy.oids import OID
 
 _ffi = _netsnmp.ffi
@@ -113,10 +113,7 @@ class SNMPSession:
 
     def get(self, *oids: OID) -> VarBindList:
         """Performs a synchronous SNMP GET request"""
-        request = _lib.snmp_pdu_create(SNMP_MSG_GET)
-        for oid in oids:
-            oid = oid_to_c(oid)
-            _lib.snmp_add_null_var(request, oid, len(oid))
+        request = make_request_pdu(SNMP_MSG_GET, *oids)
         response = _ffi.new("netsnmp_pdu**")
         if (
             code := _lib.snmp_synch_response(self.session, request, response)
@@ -134,10 +131,7 @@ class SNMPSession:
 
     def getnext(self, *oids: OID) -> VarBindList:
         """Performs a synchronous SNMP GET-NEXT request"""
-        request = _lib.snmp_pdu_create(SNMP_MSG_GETNEXT)
-        for oid in oids:
-            oid = oid_to_c(oid)
-            _lib.snmp_add_null_var(request, oid, len(oid))
+        request = make_request_pdu(SNMP_MSG_GETNEXT, *oids)
         response = _ffi.new("netsnmp_pdu**")
         if (
             code := _lib.snmp_synch_response(self.session, request, response)
@@ -155,10 +149,7 @@ class SNMPSession:
 
     def getbulk(self, *oids: OID, non_repeaters: int = 0, max_repetitions: int = 5):
         """Performs a synchronous SNMP GET-BULK request"""
-        request = _lib.snmp_pdu_create(SNMP_MSG_GETBULK)
-        for oid in oids:
-            oid = oid_to_c(oid)
-            _lib.snmp_add_null_var(request, oid, len(oid))
+        request = make_request_pdu(SNMP_MSG_GETBULK, *oids)
         # These two PDU fields are overloaded for GET-BULK requests
         request.errstat = non_repeaters
         request.errindex = max_repetitions
