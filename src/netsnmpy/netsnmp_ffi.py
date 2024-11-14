@@ -44,6 +44,10 @@ typedef struct variable_list {{
 }} netsnmp_variable_list;
 
 typedef struct snmp_pdu {{
+    /** Error status (non_repeaters in GetBulk) */
+    long            errstat;
+    /** Error index (max_repetitions in GetBulk) */
+    long            errindex;
     netsnmp_variable_list *variables;
     ...;
 }} netsnmp_pdu;
