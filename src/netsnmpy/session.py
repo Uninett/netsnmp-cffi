@@ -16,6 +16,7 @@ from netsnmpy.constants import (
     SNMP_VERSION_2star,
     SNMP_MSG_GET,
     SNMPERR_TIMEOUT,
+    SNMP_MSG_GETNEXT,
 )
 from netsnmpy.netsnmp import oid_to_c, parse_response_variables
 from netsnmpy.oids import OID
@@ -130,8 +131,26 @@ class SNMPSession:
 
         return variables
 
-    def getnext(self, oid):
-        raise NotImplementedError
+    def getnext(self, *oids: OID) -> VarBindList:
+        """Performs a synchronous SNMP GET-NEXT request"""
+        request = _lib.snmp_pdu_create(SNMP_MSG_GETNEXT)
+        for oid in oids:
+            oid = oid_to_c(oid)
+            _lib.snmp_add_null_var(request, oid, len(oid))
+        response = _ffi.new("netsnmp_pdu**")
+        if (
+            code := _lib.snmp_synch_response(self.session, request, response)
+        ) != STAT_SUCCESS:
+            # TODO: Raise a better exception
+            if code == SNMPERR_TIMEOUT:
+                raise TimeoutError("snmp_sess_synch_response")
+            raise Exception(f"snmp_sess_synch_response == {code}")
+        response_pdu = response[0]
+
+        variables = parse_response_variables(response_pdu)
+        _lib.snmp_free_pdu(response_pdu)
+
+        return variables
 
     def getbulk(self, oid, non_repeaters, max_repetitions):
         raise NotImplementedError
