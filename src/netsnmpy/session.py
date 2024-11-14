@@ -3,6 +3,7 @@ from ipaddress import IPv4Address, IPv6Address
 from typing import Union
 
 import _netsnmp
+from pysnmp.proto.rfc1905 import VarBindList
 
 import netsnmpy.netsnmp
 from netsnmpy.constants import (
@@ -108,7 +109,7 @@ class SNMPSession:
         self.session = None
         self._original_session = None
 
-    def get(self, *oids: OID) -> dict[OID, Union[int, str]]:
+    def get(self, *oids: OID) -> VarBindList:
         """Performs a synchronous SNMP GET request"""
         request = _lib.snmp_pdu_create(SNMP_MSG_GET)
         for oid in oids:

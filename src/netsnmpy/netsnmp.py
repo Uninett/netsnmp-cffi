@@ -2,7 +2,7 @@
 
 import logging
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import Union
+from typing import Union, List, Any
 
 from netsnmpy.constants import (
     ASN_APP_DOUBLE,
@@ -38,6 +38,7 @@ from . import _netsnmp
 # Re-usable type annotations:
 OIDTuple = tuple[Union[int], ...]
 ObjectIdentifier = Union[tuple[Union[int, str], ...], str]
+VarBindList = List[tuple[OID, Any]]
 
 _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib
@@ -157,8 +158,7 @@ def decode_variable(var: _ffi.CData) -> tuple[OID, Union[int, bytes, None]]:
     return oid, decode(var)
 
 
-# TODO: Not sure if I need this one yet
-def parse_response_variables(pdu):
+def parse_response_variables(pdu: _ffi.CData) -> VarBindList:
     result = []
     var = pdu.variables
     while var:
