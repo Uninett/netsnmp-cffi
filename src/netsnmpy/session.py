@@ -117,38 +117,12 @@ class SNMPSession:
     def get(self, *oids: OID) -> VarBindList:
         """Performs a synchronous SNMP GET request"""
         request = make_request_pdu(SNMP_MSG_GET, *oids)
-        response = _ffi.new("netsnmp_pdu**")
-        if (
-            code := _lib.snmp_synch_response(self.session, request, response)
-        ) != STAT_SUCCESS:
-            # TODO: Raise a better exception
-            if code == SNMPERR_TIMEOUT:
-                raise TimeoutError("snmp_sess_synch_response")
-            raise Exception(f"snmp_sess_synch_response == {code}")
-        response_pdu = response[0]
-
-        variables = parse_response_variables(response_pdu)
-        _lib.snmp_free_pdu(response_pdu)
-
-        return variables
+        return self._send_and_wait_for_response(request)
 
     def getnext(self, *oids: OID) -> VarBindList:
         """Performs a synchronous SNMP GET-NEXT request"""
         request = make_request_pdu(SNMP_MSG_GETNEXT, *oids)
-        response = _ffi.new("netsnmp_pdu**")
-        if (
-            code := _lib.snmp_synch_response(self.session, request, response)
-        ) != STAT_SUCCESS:
-            # TODO: Raise a better exception
-            if code == SNMPERR_TIMEOUT:
-                raise TimeoutError("snmp_sess_synch_response")
-            raise Exception(f"snmp_sess_synch_response == {code}")
-        response_pdu = response[0]
-
-        variables = parse_response_variables(response_pdu)
-        _lib.snmp_free_pdu(response_pdu)
-
-        return variables
+        return self._send_and_wait_for_response(request)
 
     def getbulk(self, *oids: OID, non_repeaters: int = 0, max_repetitions: int = 5):
         """Performs a synchronous SNMP GET-BULK request"""
@@ -156,21 +130,25 @@ class SNMPSession:
         # These two PDU fields are overloaded for GET-BULK requests
         request.errstat = non_repeaters
         request.errindex = max_repetitions
+        return self._send_and_wait_for_response(request)
 
+    def _send_and_wait_for_response(self, request: _ffi.CData) -> VarBindList:
+        """Sends an SNMP request and blocks until a response is received"""
         response = _ffi.new("netsnmp_pdu**")
-        if (
-            code := _lib.snmp_synch_response(self.session, request, response)
-        ) != STAT_SUCCESS:
-            # TODO: Raise a better exception
-            if code == SNMPERR_TIMEOUT:
-                raise TimeoutError("snmp_sess_synch_response")
+        code = _lib.snmp_synch_response(self.session, request, response)
+
+        # TODO: Raise better exceptions
+        # TODO: Handle errors in response packets
+        if code == STAT_SUCCESS:
+            response_pdu = response[0]
+            variables = parse_response_variables(response_pdu)
+            # Suspect the following is useless, since we allocated the PDU using CFFI
+            # _lib.snmp_free_pdu(response_pdu)
+            return variables
+        elif code == STAT_TIMEOUT:
+            raise TimeoutError("snmp_sess_synch_response")
+        else:
             raise Exception(f"snmp_sess_synch_response == {code}")
-        response_pdu = response[0]
-
-        variables = parse_response_variables(response_pdu)
-        _lib.snmp_free_pdu(response_pdu)
-
-        return variables
 
     def walk(self, oid):
         raise NotImplementedError
