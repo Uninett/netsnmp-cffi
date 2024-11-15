@@ -12,6 +12,11 @@ typedef unsigned short u_short;
 typedef unsigned char u_char;
 typedef unsigned int u_int;
 typedef unsigned long oid;
+typedef struct timeval {{
+    long tv_sec;
+    long tv_usec;
+}};
+
 
 typedef struct {{ ...; }} fd_set;
 
@@ -133,6 +138,11 @@ const char *netsnmp_get_version(void);
 netsnmp_pdu *snmp_pdu_create(int type);
 void snmp_free_pdu( netsnmp_pdu *pdu);
 netsnmp_variable_list *snmp_add_null_var(netsnmp_pdu *pdu, const oid * name, size_t name_length);
+
+void   netsnmp_large_fd_set_init(netsnmp_large_fd_set *fdset, int setsize);
+void   netsnmp_large_fd_set_cleanup(netsnmp_large_fd_set *fdset);
+int    netsnmp_large_fd_is_set(int fd, netsnmp_large_fd_set *fdset);
+void   netsnmp_large_fd_setfd( int fd, netsnmp_large_fd_set *fdset);
 
 
 int                  snmp_register_callback(int major, int minor, SNMPCallback * new_callback, void *arg);

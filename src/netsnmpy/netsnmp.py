@@ -47,6 +47,7 @@ _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib
 _log = logging.getLogger(__name__)
 _U_LONG_SIZE = _ffi.sizeof("unsigned long")
+MAX_FD_SIZE = 2048
 
 
 def get_version() -> tuple[Union[int, str], ...]:
@@ -255,3 +256,53 @@ def make_request_pdu(operation: int, *oids: OID) -> _ffi.CData:
         oid = oid_to_c(oid)
         _lib.snmp_add_null_var(request, oid, len(oid))
     return request
+
+
+def snmp_select_info2() -> tuple[List[int], float]:
+    """Returns a list of session file descriptors opened by Net-SNMP that should be
+    part of the list of read-descriptors added to a `select()` call when working
+    asynchronously (i.e. the returned descriptors should all have active readers in
+    an asyncio event loop).  Also returns Net-SNMP's recommended timeout value for a
+    `select()` call.
+
+    :returns: A tuple of the list of file descriptors and the timeout value to use.
+    """
+    fdset = _ffi.new("netsnmp_large_fd_set*")
+    _lib.netsnmp_large_fd_set_init(fdset, MAX_FD_SIZE)
+    maxfd = _ffi.new("int*", 0)
+    timeout = _ffi.new("struct timeval*")
+    timeout.tv_sec = 1  # 1 second
+    timeout.tv_usec = 0  # 0 microseconds
+    block = _ffi.new("int*", 0)
+
+    fd_count = _lib.snmp_select_info2(maxfd, fdset, timeout, block)
+    _log.debug("snmp_select_info2(...) = %d", fd_count)
+
+    use_timeout = None
+    if not block[0]:
+        use_timeout = timeout.tv_sec + timeout.tv_usec / 1e6
+    return large_fd_set_to_list(fdset, maxfd[0]), use_timeout
+
+
+def large_fd_set_to_list(fdset: _ffi.CData, maxfd: int) -> List[int]:
+    """Converts a large_fd_set to a list of file descriptor numbers.
+
+    Also cleans up the incoming fdset to avoid memory leaks.
+    """
+    result = [fd for fd in range(maxfd) if _lib.netsnmp_large_fd_is_set(fd, fdset)]
+    _lib.netsnmp_large_fd_set_cleanup(fdset)
+    return result
+
+
+def fd_to_large_fd_set(fd: int) -> _ffi.CData:
+    """Converts a single file descriptor to a large_fd_set for use with `snmp_read2()`
+    calls.
+
+    The returned large_fd_set must be cleaned up with `netsnmp_large_fd_set_cleanup(
+    fdset)` to avoid memory leaks.
+
+    """
+    fdset = _ffi.new("netsnmp_large_fd_set*")
+    _lib.netsnmp_large_fd_set_init(fdset, MAX_FD_SIZE)
+    _lib.netsnmp_large_fd_setfd(fd, fdset)
+    return fdset
