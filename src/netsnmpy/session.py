@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from ipaddress import IPv4Address, IPv6Address
 from typing import Union
@@ -19,15 +20,19 @@ from netsnmpy.constants import (
     SNMP_VERSION_sec,
 )
 from netsnmpy.netsnmp import (
+    fd_to_large_fd_set,
     log_session_error,
     make_request_pdu,
     parse_response_variables,
+    snmp_select_info2,
 )
 from netsnmpy.oids import OID
 
 _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib
 _log = logging.getLogger(__name__)
+_fd_map = {}
+_timeout_timer: asyncio.TimerHandle = None
 
 # TODO: Move these constants to a separate module
 STAT_SUCCESS = 0
@@ -158,3 +163,58 @@ class SNMPSession:
 
     def __del__(self):
         self.close()
+
+
+class SNMPReader:
+    """An SNMPReader is only responsible for calling the Net-SNMP read function
+    when its associated socket is ready to be read from.
+    """
+
+    def __init__(self, fd: int):
+        self.fd = fd
+
+    def __call__(self):
+        # TODO: Instead of creating and cleaning the fdset on every read operation, consider
+        #  keeping it around for the lifetime of the SNMPReader
+        fdset = fd_to_large_fd_set(self.fd)
+        _lib.snmp_read2(fdset)
+        _lib.netsnmp_large_fd_set_cleanup(fdset)
+
+
+def update_event_loop():
+    """Ensures the asyncio event loop is informed on which file descriptors to monitor
+    for Net-SNMP events.
+    """
+    global _timeout_timer
+    loop = asyncio.get_event_loop()
+    fds, timeout = snmp_select_info2()
+    _log.debug("event loop settings: fds=%r, timeout=%r", fds, timeout)
+    # Add missing Net-SNMP file descriptors to the event loop
+    for fd in fds:
+        if fd not in _fd_map:
+            reader = SNMPReader(fd)
+            _fd_map[fd] = reader
+            loop.add_reader(fd, reader)
+
+    # Remove Net-SNMP file descriptors that have become obsolete
+    current = set(_fd_map.keys())
+    wanted = set(fds)
+    to_remove = current - wanted
+    for fd in to_remove:
+        loop.remove_reader(fd)
+        del _fd_map[fd]
+
+    # Handle Net-SNMP timeouts in a timely manner ;-)
+    if _timeout_timer:
+        _timeout_timer.cancel()
+        _timeout_timer = None
+    if timeout is not None:
+        _timeout_timer = loop.call_later(timeout, check_for_timeouts)
+
+
+def check_for_timeouts():
+    """Handles Net-SNMP socket timeouts"""
+    global _timeout_timer
+    _timeout_timer = None
+    _lib.snmp_timeout()
+    update_event_loop()

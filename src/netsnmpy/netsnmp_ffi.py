@@ -163,6 +163,8 @@ void            snmp_read(fd_set *);
 void            snmp_read2(netsnmp_large_fd_set *);
 int             snmp_synch_response(netsnmp_session *, netsnmp_pdu *,
                                     netsnmp_pdu **);
+void            snmp_timeout(void);
+
 int             snmp_select_info(int *, fd_set *, struct timeval *,
                                  int *);
 int             snmp_select_info2(int *, netsnmp_large_fd_set *,
