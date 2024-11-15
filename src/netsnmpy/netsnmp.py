@@ -30,6 +30,9 @@ from netsnmpy.constants import (
     NETSNMP_LOGHANDLER_CALLBACK,
     SNMP_CALLBACK_LIBRARY,
     SNMP_CALLBACK_LOGGING,
+    SNMP_ENDOFMIBVIEW,
+    SNMP_NOSUCHINSTANCE,
+    SNMP_NOSUCHOBJECT,
 )
 from netsnmpy.oids import OID
 
@@ -105,8 +108,31 @@ def identifier_to_string(symbol: ObjectIdentifier) -> str:
 
 
 #
-# Functions to decode C-level SNMP variable values Python objects
+# Functions and classes to decode C-level SNMP variable values Python objects
 #
+class SNMPErrorValue:
+    """Base class for special SNMP varbind values"""
+
+    def __init__(self, value: Any = None):
+        pass
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__
+
+
+class NoSuchObject(SNMPErrorValue):
+    def __str__(self):
+        return "No Such Object available on this agent at this OID"
+
+
+class NoSuchInstance(SNMPErrorValue):
+    def __str__(self):
+        return "No such instance currently exists at this OID"
+
+
+class EndOfMibView(SNMPErrorValue):
+    def __str__(self):
+        return "No more variables left in this MIB View (It is past the end of the MIB tree)"
 
 
 def decode_oid(var: _ffi.CData) -> tuple[int]:
@@ -142,6 +168,9 @@ DECODER_FUNCTION_MAP = {
     ASN_COUNTER64: decode_bigint,
     ASN_APP_FLOAT: lambda var: var.val.floatVal[0],
     ASN_APP_DOUBLE: lambda var: var.val.doubleVal[0],
+    SNMP_NOSUCHOBJECT: NoSuchObject,
+    SNMP_NOSUCHINSTANCE: NoSuchInstance,
+    SNMP_ENDOFMIBVIEW: EndOfMibView,
 }
 
 
