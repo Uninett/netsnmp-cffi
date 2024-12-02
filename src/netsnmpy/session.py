@@ -61,6 +61,12 @@ SnmpVersion = Union[str, int]
 
 
 class SNMPSession:
+    """A high-level wrapper around a Net-SNMP session"""
+
+    # This keeps track of sessions to ensure the Net-SNMP callback function knows
+    # which Python session object to associate incoming SNMP responses with
+    session_map: dict[int, "SNMPSession"] = {}
+
     def __init__(
         self,
         host: Host,
@@ -110,6 +116,9 @@ class SNMPSession:
             raise Exception("snmp_open")
         self._original_session = session
         self.session = session_copy
+        self.session_map[id(self)] = self
+
+        update_event_loop()
 
     def close(self):
         """Closes the SNMP session"""
@@ -118,6 +127,9 @@ class SNMPSession:
         _lib.snmp_close(self.session)
         self.session = None
         self._original_session = None
+        self.session_map.pop(id(self), None)
+
+        update_event_loop()
 
     def get(self, *oids: OID) -> VarBindList:
         """Performs a synchronous SNMP GET request"""
