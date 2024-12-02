@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from asyncio import Future
 from ipaddress import IPv4Address, IPv6Address
 from typing import Union
 
@@ -7,6 +8,8 @@ import _netsnmp
 from pysnmp.proto.rfc1905 import VarBindList
 
 from netsnmpy.constants import (
+    NETSNMP_CALLBACK_OP_RECEIVED_MESSAGE,
+    NETSNMP_CALLBACK_OP_TIMED_OUT,
     SNMP_MSG_GET,
     SNMP_MSG_GETBULK,
     SNMP_MSG_GETNEXT,
@@ -19,6 +22,7 @@ from netsnmpy.constants import (
     SNMP_VERSION_2u,
     SNMP_VERSION_sec,
 )
+from netsnmpy.errors import SNMPError
 from netsnmpy.netsnmp import (
     fd_to_large_fd_set,
     log_session_error,
@@ -31,6 +35,7 @@ from netsnmpy.oids import OID
 _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib
 _log = logging.getLogger(__name__)
+_callback_log = logging.getLogger(__name__ + ".callback")
 _fd_map = {}
 _timeout_timer: asyncio.TimerHandle = None
 
@@ -86,6 +91,8 @@ class SNMPSession:
         self.retries = retries
         self.session = None
         self._original_session = None
+        self._callback_data = None
+        self._futures: dict[int, Future] = {}
 
     def open(self):
         """Opens the SNMP session"""
@@ -106,6 +113,12 @@ class SNMPSession:
         peername = f"udp:{self.host}:{self.port}".encode("utf-8")
         peername_c = _ffi.new("char[]", peername)
         session.peername = peername_c
+
+        # Set up the callback function to handle incoming SNMP responses
+        session.callback = _lib._netsnmp_session_callback
+        self._callback_data = _ffi.new("struct _callback_data*")
+        self._callback_data.session_id = id(self)
+        session.callback_magic = self._callback_data
 
         # Net-SNMP returns a copy of the session struct.  No modifications of the
         # original session struct will make a difference after this point.
@@ -136,6 +149,11 @@ class SNMPSession:
         request = make_request_pdu(SNMP_MSG_GET, *oids)
         return self._send_and_wait_for_response(request)
 
+    async def aget(self, *oids: OID) -> VarBindList:
+        """Performs an asynchronous SNMP GET request"""
+        request = make_request_pdu(SNMP_MSG_GET, *oids)
+        return await self._send_async(request, "get")
+
     def getnext(self, *oids: OID) -> VarBindList:
         """Performs a synchronous SNMP GET-NEXT request"""
         request = make_request_pdu(SNMP_MSG_GETNEXT, *oids)
@@ -148,6 +166,58 @@ class SNMPSession:
         request.errstat = non_repeaters
         request.errindex = max_repetitions
         return self._send_and_wait_for_response(request)
+
+    def _send_async(
+        self, request: _ffi.CData, send_type_for_logging: str = None
+    ) -> Future:
+        """Sends an SNMP request asynchronously"""
+        code = _lib.snmp_send(self.session, request)
+        self._handle_send_status(request, code, send_type_for_logging)
+
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+        self._futures[request.reqid] = future
+        update_event_loop()
+
+        return future
+
+    def _handle_send_status(
+        self, request: _ffi.CData, send_status: int, send_type_for_logging: str = None
+    ):
+        """Handles errors flagged by return values of `snmp_send` calls by raising an
+        appropriate exception.
+
+        :param send_status: The return value of the `snmp_send` call.  A value of 0
+                            indicates an error.  Anything else is usually a request ID
+                            and is ignored by this method.
+        """
+        if send_status != 0:
+            return
+        c_library_error = _ffi.new("int*")
+        snmp_error = _ffi.new("int*")
+        error_string = _ffi.new("char**")
+        _lib.snmp_error(self.session, c_library_error, snmp_error, error_string)
+        # On error we need to free the PDU struct ourselves
+        _lib.snmp_free_pdu(request)
+
+        if error_string[0] != _ffi.NULL:
+            error_string = _ffi.string(error_string[0]).decode("utf-8")
+        else:
+            error_string = None
+        msg_fmt = "%s: snmp_send cliberr=%s, snmperr=%s, errstring=%s"
+        msg_args = (
+            send_type_for_logging,
+            c_library_error[0],
+            snmp_error[0],
+            error_string,
+        )
+        _log.debug(msg_fmt, *msg_args)
+        if snmp_error[0] == SNMPERR_TIMEOUT:
+            # TODO: Check whether this happens for initial SNMPv3 requests (i.e.
+            #  Net-SNMP performs an asynchronouse engine ID discovery that could time
+            #  out)
+            raise TimeoutError()
+        raise SNMPError(msg_fmt % msg_args)
 
     def _send_and_wait_for_response(self, request: _ffi.CData) -> VarBindList:
         """Sends an SNMP request and blocks until a response is received"""
@@ -167,6 +237,36 @@ class SNMPSession:
         else:
             raise Exception(f"snmp_sess_synch_response == {code}")
 
+    def callback(self, reqid: int, pdu: _ffi.CData):
+        """Handles incoming SNMP responses and updates futures.
+
+        Calls to this method are usually triggered by the global callback function,
+        when it has found the appropriate session object for an incoming response.
+        """
+        _log.debug("Got a callback for session with %s", self.host)
+        future = self._futures.pop(reqid, None)
+        if future is None:
+            _log.error("Received SNMP response for unknown request ID %s", reqid)
+            return
+
+        variables = parse_response_variables(pdu[0])
+        future.set_result(variables)
+
+    def handle_timeout(self, reqid: int):
+        """Handles an SNMP timeout.
+
+        This is usually called by the global callback function when a timeout occurs.
+        It maps the request timeout to the appropriate future object and sets an
+        exception on it.
+        """
+        _log.debug("Got a timeout for session with %s", self.host)
+        future = self._futures.pop(reqid, None)
+        if future is None:
+            _log.error("Received timeout for unknown request ID %s", reqid)
+            return
+
+        future.set_exception(TimeoutError())
+
     def walk(self, oid):
         raise NotImplementedError
 
@@ -175,6 +275,38 @@ class SNMPSession:
 
     def __del__(self):
         self.close()
+
+
+@_ffi.def_extern()
+def _netsnmp_session_callback(
+    operation: int, session: _ffi.CData, reqid: int, pdu: _ffi.CData, magic: _ffi.CData
+) -> int:
+    """Callback function to handle SNMP responses.
+
+    Individual sessions, or even requests (using `snmp_async_send`), can define their
+    own callback functions, but according to the CFFI docs, dynamic callbacks in Python
+    are less efficient than statically declared ones.  This is why we use a single
+    callback function and keep a session map in order to route incoming SNMP responses
+    to the correct Python session object.
+    """
+    callback_data = _ffi.cast("_callback_data*", magic)
+    session = SNMPSession.session_map.get(callback_data.session_id)
+    if session is None:
+        _callback_log.error("Received SNMP response for unknown session")
+        return 1
+
+    try:
+        if operation == NETSNMP_CALLBACK_OP_RECEIVED_MESSAGE:
+            session.callback(reqid, pdu)
+        elif operation == NETSNMP_CALLBACK_OP_TIMED_OUT:
+            session.handle_timeout(reqid)
+        else:
+            _callback_log.error("Unknown operation: %s", operation)
+    except Exception as error:
+        _callback_log.exception(
+            "Session callback raised an unexpected exception: %s", error
+        )
+    return 1
 
 
 class SNMPReader:

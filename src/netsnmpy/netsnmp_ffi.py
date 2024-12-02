@@ -163,6 +163,11 @@ netsnmp_log_handler *netsnmp_register_loghandler( int type, int pri );
 void                 snmp_set_do_debugging(int);
 extern "Python" int  python_log_callback(int, int, void*, void*);
 
+/* Error handling functions */
+void            snmp_sess_perror (char * msg, struct snmp_session *);
+void            snmp_error (netsnmp_session *session,
+                            int *pcliberr, int *psnmperr, char **pperrstring);
+
 /* Traditional session API from session_api.h */
 void            snmp_sess_init(netsnmp_session *);
 
