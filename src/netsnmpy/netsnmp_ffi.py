@@ -5,6 +5,13 @@ from cffi import FFI
 from netsnmpy.constants import USM_AUTH_KU_LEN, USM_PRIV_KU_LEN
 
 ffi = FFI()
+_custom_typedefs = """
+/* Struct to hold custom session callback data (callback_magic value) */
+typedef struct _callback_data {
+    void          *reserved;
+    unsigned long  session_id;
+} _callback_data;
+"""
 _CDEF = f"""
 /* Typedefs and structs we will be needing access to */
 typedef unsigned long u_long;
@@ -20,7 +27,13 @@ typedef struct timeval {{
 
 typedef struct {{ ...; }} fd_set;
 
-typedef int    (*netsnmp_callback);
+/* Forward declarations needed for session callbacks */
+typedef struct snmp_pdu netsnmp_pdu;
+typedef struct snmp_session netsnmp_session;
+typedef int     (*netsnmp_callback) (int, netsnmp_session *, int,
+                                          netsnmp_pdu *, void *);
+
+
 typedef struct netsnmp_container_s;
 
 struct counter64 {{
@@ -49,6 +62,7 @@ typedef struct variable_list {{
 }} netsnmp_variable_list;
 
 typedef struct snmp_pdu {{
+    long            reqid;
     /** Error status (non_repeaters in GetBulk) */
     long            errstat;
     /** Error index (max_repetitions in GetBulk) */
@@ -120,7 +134,6 @@ struct snmp_session {{
     ...;
 }};
 
-typedef struct snmp_session netsnmp_session;
 typedef struct netsnmp_large_fd_set_s {{ ...; }} netsnmp_large_fd_set;
 
 /* Definitions needed for logging */
@@ -170,6 +183,10 @@ int             snmp_select_info(int *, fd_set *, struct timeval *,
 int             snmp_select_info2(int *, netsnmp_large_fd_set *,
                                   struct timeval *, int *);
 
+/* Statically declare our own session callback function */
+extern "Python"  int  _netsnmp_session_callback(int, netsnmp_session*, int,
+                                                netsnmp_pdu*, void*);
+
 /* MIB parsing functions */
 void         *snmp_parse_oid(const char *input,
                              oid *objid, size_t *objidlen);
@@ -181,15 +198,18 @@ int           snprint_variable(char *buf, size_t buf_len,
 int           snprint_objid(char *buf, size_t buf_len,
                             const oid * objid, size_t objidlen);
 
+{_custom_typedefs}
 """
 
 ffi.cdef(_CDEF)
 
 ffi.set_source(
     "_netsnmp",
-    """
+    f"""
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/net-snmp-includes.h>
+
+{_custom_typedefs}
 """,
     libraries=["netsnmp"],
 )
