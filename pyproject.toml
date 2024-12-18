@@ -37,6 +37,7 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-cov",
+    "pytest-asyncio",
     "retry",
     "ruff",
     "snmpsim>=1.0",
@@ -103,3 +104,7 @@ exclude_also = [
     # We don't need tests to cover unimplementedness
     "raise NotImplementedError",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
