@@ -159,6 +159,11 @@ class SNMPSession:
         request = make_request_pdu(SNMP_MSG_GETNEXT, *oids)
         return self._send_and_wait_for_response(request)
 
+    async def agetnext(self, *oids: OID) -> VarBindList:
+        """Performs an asynchronous SNMP GET-NEXT request"""
+        request = make_request_pdu(SNMP_MSG_GETNEXT, *oids)
+        return await self._send_async(request, "getnext")
+
     def getbulk(self, *oids: OID, non_repeaters: int = 0, max_repetitions: int = 5):
         """Performs a synchronous SNMP GET-BULK request"""
         request = make_request_pdu(SNMP_MSG_GETBULK, *oids)
@@ -166,6 +171,16 @@ class SNMPSession:
         request.errstat = non_repeaters
         request.errindex = max_repetitions
         return self._send_and_wait_for_response(request)
+
+    async def agetbulk(
+        self, *oids: OID, non_repeaters: int = 0, max_repetitions: int = 5
+    ):
+        """Performs an asynchronous SNMP GET-BULK request"""
+        request = make_request_pdu(SNMP_MSG_GETBULK, *oids)
+        # These two PDU fields are overloaded for GET-BULK requests
+        request.errstat = non_repeaters
+        request.errindex = max_repetitions
+        return await self._send_async(request, "getbulk")
 
     def _send_async(
         self, request: _ffi.CData, send_type_for_logging: str = None
