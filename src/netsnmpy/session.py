@@ -189,7 +189,7 @@ class SNMPSession:
         code = _lib.snmp_send(self.session, request)
         self._handle_send_status(request, code, send_type_for_logging)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._futures[request.reqid] = future
         update_event_loop()
@@ -345,7 +345,12 @@ def update_event_loop():
     for Net-SNMP events.
     """
     global _timeout_timer
-    loop = asyncio.get_event_loop()
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _log.debug("No running event loop found, nothing to update")
+        return
+
     fds, timeout = snmp_select_info2()
     _log.debug("event loop settings: fds=%r, timeout=%r", fds, timeout)
     # Add missing Net-SNMP file descriptors to the event loop
