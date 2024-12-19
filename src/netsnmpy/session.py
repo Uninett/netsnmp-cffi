@@ -146,8 +146,7 @@ class SNMPSession:
 
     def get(self, *oids: OID) -> VarBindList:
         """Performs a synchronous SNMP GET request"""
-        request = make_request_pdu(SNMP_MSG_GET, *oids)
-        return self._send_and_wait_for_response(request)
+        return asyncio.run(self.aget(*oids))
 
     async def aget(self, *oids: OID) -> VarBindList:
         """Performs an asynchronous SNMP GET request"""
@@ -156,8 +155,7 @@ class SNMPSession:
 
     def getnext(self, *oids: OID) -> VarBindList:
         """Performs a synchronous SNMP GET-NEXT request"""
-        request = make_request_pdu(SNMP_MSG_GETNEXT, *oids)
-        return self._send_and_wait_for_response(request)
+        return asyncio.run(self.agetnext(*oids))
 
     async def agetnext(self, *oids: OID) -> VarBindList:
         """Performs an asynchronous SNMP GET-NEXT request"""
@@ -166,11 +164,11 @@ class SNMPSession:
 
     def getbulk(self, *oids: OID, non_repeaters: int = 0, max_repetitions: int = 5):
         """Performs a synchronous SNMP GET-BULK request"""
-        request = make_request_pdu(SNMP_MSG_GETBULK, *oids)
-        # These two PDU fields are overloaded for GET-BULK requests
-        request.errstat = non_repeaters
-        request.errindex = max_repetitions
-        return self._send_and_wait_for_response(request)
+        return asyncio.run(
+            self.agetbulk(
+                *oids, non_repeaters=non_repeaters, max_repetitions=max_repetitions
+            )
+        )
 
     async def agetbulk(
         self, *oids: OID, non_repeaters: int = 0, max_repetitions: int = 5
@@ -233,24 +231,6 @@ class SNMPSession:
             #  out)
             raise TimeoutError()
         raise SNMPError(msg_fmt % msg_args)
-
-    def _send_and_wait_for_response(self, request: _ffi.CData) -> VarBindList:
-        """Sends an SNMP request and blocks until a response is received"""
-        response = _ffi.new("netsnmp_pdu**")
-        code = _lib.snmp_synch_response(self.session, request, response)
-
-        # TODO: Raise better exceptions
-        # TODO: Handle errors in response packets
-        if code == STAT_SUCCESS:
-            response_pdu = response[0]
-            variables = parse_response_variables(response_pdu)
-            # Suspect the following is useless, since we allocated the PDU using CFFI
-            # _lib.snmp_free_pdu(response_pdu)
-            return variables
-        elif code == STAT_TIMEOUT:
-            raise TimeoutError("snmp_sess_synch_response")
-        else:
-            raise Exception(f"snmp_sess_synch_response == {code}")
 
     def callback(self, reqid: int, pdu: _ffi.CData):
         """Handles incoming SNMP responses and updates futures.
