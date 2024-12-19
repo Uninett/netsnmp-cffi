@@ -13,6 +13,7 @@ from netsnmpy.constants import (
     SNMP_MSG_GET,
     SNMP_MSG_GETBULK,
     SNMP_MSG_GETNEXT,
+    SNMP_MSG_SET,
     SNMP_VERSION_1,
     SNMP_VERSION_3,
     SNMPERR_TIMEOUT,
@@ -24,8 +25,10 @@ from netsnmpy.constants import (
 )
 from netsnmpy.errors import SNMPError
 from netsnmpy.netsnmp import (
+    Variable,
     fd_to_large_fd_set,
     log_session_error,
+    make_pdu_with_variables,
     make_request_pdu,
     parse_response_variables,
     snmp_select_info2,
@@ -161,6 +164,15 @@ class SNMPSession:
         """Performs an asynchronous SNMP GET-NEXT request"""
         request = make_request_pdu(SNMP_MSG_GETNEXT, *oids)
         return await self._send_async(request, "getnext")
+
+    def set(self, *variables: Variable) -> VarBindList:
+        """Performs a synchronous SNMP SET request"""
+        return asyncio.run(self.aset(*variables))
+
+    async def aset(self, *variables: Variable) -> VarBindList:
+        """Performs an asynchronous SNMP SET request"""
+        request = make_pdu_with_variables(SNMP_MSG_SET, *variables)
+        return await self._send_async(request, "set")
 
     def getbulk(self, *oids: OID, non_repeaters: int = 0, max_repetitions: int = 5):
         """Performs a synchronous SNMP GET-BULK request"""
