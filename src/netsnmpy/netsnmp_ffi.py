@@ -151,6 +151,7 @@ const char *netsnmp_get_version(void);
 netsnmp_pdu *snmp_pdu_create(int type);
 void snmp_free_pdu( netsnmp_pdu *pdu);
 netsnmp_variable_list *snmp_add_null_var(netsnmp_pdu *pdu, const oid * name, size_t name_length);
+int                    snmp_add_var(netsnmp_pdu *, const oid *, size_t, char, const char *);
 
 void   netsnmp_large_fd_set_init(netsnmp_large_fd_set *fdset, int setsize);
 void   netsnmp_large_fd_set_cleanup(netsnmp_large_fd_set *fdset);

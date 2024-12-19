@@ -65,6 +65,9 @@ class ValueType(Enum):
     OBJID = "o"
 
 
+Variable = tuple[OID, Union[ValueType, str], Any]
+
+
 def get_version() -> tuple[Union[int, str], ...]:
     """Returns the version of the linked Net-SNMP library as a tuple"""
     _version_ptr = _lib.netsnmp_get_version()
@@ -286,7 +289,9 @@ def log_session_error(subsystem: str, session: _ffi.CData):
 
 
 def make_request_pdu(operation: int, *oids: OID) -> _ffi.CData:
-    """Creates and returns a new SNMP Request-PDU for the given operation and OIDs.
+    """Creates and returns a new SNMP Request-PDU for the given operation and OIDs,
+    specifically for read operations (i.e. the varbinds will only contain OIDs and no
+    values).
 
     The returned struct is allocated/owned by the Net-SNMP library, and will be
     automatically freed by the library following a successful `snmp_send` call.
@@ -296,6 +301,26 @@ def make_request_pdu(operation: int, *oids: OID) -> _ffi.CData:
     for oid in oids:
         oid = oid_to_c(oid)
         _lib.snmp_add_null_var(request, oid, len(oid))
+    return request
+
+
+def make_pdu_with_variables(operation: int, *variables: Variable) -> _ffi.CData:
+    """Creates and returns a new SNMP PDU for the given operation and variables,
+    suitable for response PDUs or for sending SET requests. Each variable consists of
+    a tuple of the OID, the (SNMP) type of the value, and the value itself.
+
+    The returned struct is allocated/owned by the Net-SNMP library, and will be
+    automatically freed by the library following a successful `snmp_send` call.
+    However, if `snmp_send` fails, the caller is responsible for freeing the PDU.
+    """
+    request = _lib.snmp_pdu_create(operation)
+    for oid, value_type, value in variables:
+        oid = oid_to_c(oid)
+        value_type = ValueType(value_type)
+        encoded_value = encode_variable(value_type, value)
+        _lib.snmp_add_var(
+            request, oid, len(oid), value_type.value.encode("utf-8"), encoded_value
+        )
     return request
 
 
