@@ -1,6 +1,7 @@
 """Low-level interface to the Net-SNMP library"""
 
 import logging
+from enum import Enum
 from ipaddress import IPv4Address, IPv6Address, ip_address
 from typing import Any, List, Union
 
@@ -48,6 +49,20 @@ _lib = _netsnmp.lib
 _log = logging.getLogger(__name__)
 _U_LONG_SIZE = _ffi.sizeof("unsigned long")
 MAX_FD_SIZE = 2048
+
+
+class ValueType(Enum):
+    """Enumeration of SNMP variable types used by Net-SNMP"""
+
+    INTEGER = "i"
+    UNSIGNED32 = "u"
+    COUNTER = "c"
+    COUNTER64 = "C"
+    TIMETICKS = "t"
+    OCTETSTRING = "s"
+    BITSTRING = "b"
+    IPADDR = "a"
+    OBJID = "o"
 
 
 def get_version() -> tuple[Union[int, str], ...]:
@@ -186,6 +201,32 @@ def decode_variable(var: _ffi.CData) -> tuple[OID, Union[int, bytes, None]]:
         _log.debug("could not decode oid %s type %s", oid, var.type)
         return oid, None
     return oid, decode(var)
+
+
+ENCODER_FUNCTION_MAP = {
+    ValueType.INTEGER: lambda var: _ffi.new("int*", var),
+    ValueType.UNSIGNED32: lambda var: _ffi.new("unsigned int*", var),
+    ValueType.COUNTER: lambda var: _ffi.new("unsigned long*", var),
+    ValueType.COUNTER64: lambda var: _ffi.new("unsigned long long*", var),
+    ValueType.TIMETICKS: lambda var: _ffi.new("unsigned long*", var),
+    ValueType.OCTETSTRING: lambda var: _ffi.new("char[]", var),
+    ValueType.BITSTRING: lambda var: _ffi.new("char[]", var),
+    ValueType.IPADDR: lambda var: _ffi.new("unsigned long*", int(ip_address(var))),
+    ValueType.OBJID: oid_to_c,
+}
+
+
+def encode_variable(value_type: Union[ValueType, str], value: Any) -> _ffi.CData:
+    """Encodes a value for use in a Net-SNMP PDU.
+
+    :param value_type: The SNMP type of the value
+    :param value: The value to encode: Any Python object that is convertible to the
+                  given `value_type`
+    """
+    encode = ENCODER_FUNCTION_MAP.get(value_type, None)
+    if encode:
+        return encode(value)
+    raise ValueError(f"Unsupported value type: {value_type}")
 
 
 def parse_response_variables(pdu: _ffi.CData) -> VarBindList:
