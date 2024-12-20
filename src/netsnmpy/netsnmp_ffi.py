@@ -2,7 +2,8 @@
 
 from cffi import FFI
 
-from netsnmpy.constants import USM_AUTH_KU_LEN, USM_PRIV_KU_LEN
+USM_AUTH_KU_LEN = 64
+USM_PRIV_KU_LEN = 64
 
 ffi = FFI()
 _custom_typedefs = """
