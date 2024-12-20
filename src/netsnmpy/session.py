@@ -4,7 +4,7 @@ from asyncio import Future
 from ipaddress import IPv4Address, IPv6Address
 from typing import Union
 
-import _netsnmp
+from netsnmpy import _netsnmp
 from pysnmp.proto.rfc1905 import VarBindList
 
 from netsnmpy.constants import (

@@ -211,7 +211,7 @@ int           snprint_objid(char *buf, size_t buf_len,
 ffi.cdef(_CDEF)
 
 ffi.set_source(
-    "_netsnmp",
+    "netsnmpy._netsnmp",
     f"""
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/net-snmp-includes.h>
