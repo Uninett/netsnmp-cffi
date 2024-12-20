@@ -219,6 +219,11 @@ ffi.set_source(
 {_custom_typedefs}
 """,
     libraries=["netsnmp"],
+    # net-snmp header files are full of warnings we can't do anything about
+    extra_compile_args=[
+        "-Wno-implicit-function-declaration",
+        "-Wno-deprecated-declarations",
+    ],
 )
 
 if __name__ == "__main__":
