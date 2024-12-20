@@ -9,15 +9,6 @@ from retry import retry
 from netsnmpy.oids import OID
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Redefine pytest-asyncio's event_loop fixture to have a session scope"""
-    policy = asyncio.get_event_loop_policy()
-    loop = policy.new_event_loop()
-    yield loop
-    loop.close()
-
-
 async def _verify_localhost_snmp_response(port: int):
     """Verifies that the snmpsimd fixture process is responding, by using SNMPSession
     directly to query it.
