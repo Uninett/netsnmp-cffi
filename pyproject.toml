@@ -29,6 +29,9 @@ dynamic = ["version"]
 [project.urls]
 "Homepage" = "https://github.com/Uninett/netsnmp-cffi"
 
+[project.scripts]
+asnmpget = "netsnmpy.programs.asnmpget:main"
+
 [project.optional-dependencies]
 dev = [
     "build",
