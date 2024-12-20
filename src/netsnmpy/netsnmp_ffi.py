@@ -219,6 +219,8 @@ ffi.set_source(
 {_custom_typedefs}
 """,
     libraries=["netsnmp"],
+    library_dirs=["/usr/lib"],
+    include_dirs=["/usr/include"],
     # net-snmp header files are full of warnings we can't do anything about
     extra_compile_args=[
         "-Wno-implicit-function-declaration",
