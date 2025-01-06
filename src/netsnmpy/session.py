@@ -5,8 +5,6 @@ from ipaddress import IPv4Address, IPv6Address
 from typing import Union
 
 from netsnmpy import _netsnmp
-from pysnmp.proto.rfc1905 import VarBindList
-
 from netsnmpy.constants import (
     NETSNMP_CALLBACK_OP_RECEIVED_MESSAGE,
     NETSNMP_CALLBACK_OP_TIMED_OUT,
@@ -25,6 +23,7 @@ from netsnmpy.constants import (
 )
 from netsnmpy.errors import SNMPError
 from netsnmpy.netsnmp import (
+    VarBindList,
     Variable,
     fd_to_large_fd_set,
     log_session_error,
