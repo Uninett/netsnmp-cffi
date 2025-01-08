@@ -1,8 +1,9 @@
 import asyncio
 import logging
-from asyncio import Future
+from asyncio import AbstractEventLoop, Future
 from ipaddress import IPv4Address, IPv6Address
 from typing import Union
+from weakref import WeakKeyDictionary
 
 from netsnmpy import _netsnmp
 from netsnmpy.constants import (
@@ -39,7 +40,9 @@ _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib
 _log = logging.getLogger(__name__)
 _callback_log = logging.getLogger(__name__ + ".callback")
-_fd_map = {}
+_loop_fd_map: WeakKeyDictionary[AbstractEventLoop, dict[int, "SNMPReader"]] = (
+    WeakKeyDictionary()
+)
 _timeout_timer: asyncio.TimerHandle = None
 
 # TODO: Move these constants to a separate module
@@ -345,22 +348,23 @@ def update_event_loop():
         _log.debug("No running event loop found, nothing to update")
         return
 
+    fd_map = _loop_fd_map.setdefault(loop, {})
     fds, timeout = snmp_select_info2()
     _log.debug("event loop settings: fds=%r, timeout=%r", fds, timeout)
     # Add missing Net-SNMP file descriptors to the event loop
     for fd in fds:
-        if fd not in _fd_map:
+        if fd not in fd_map:
             reader = SNMPReader(fd)
-            _fd_map[fd] = reader
+            fd_map[fd] = reader
             loop.add_reader(fd, reader)
 
     # Remove Net-SNMP file descriptors that have become obsolete
-    current = set(_fd_map.keys())
+    current = set(fd_map.keys())
     wanted = set(fds)
     to_remove = current - wanted
     for fd in to_remove:
         loop.remove_reader(fd)
-        del _fd_map[fd]
+        del fd_map[fd]
 
     # Handle Net-SNMP timeouts in a timely manner ;-)
     if _timeout_timer:
