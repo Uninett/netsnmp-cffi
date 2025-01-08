@@ -26,6 +26,7 @@ from netsnmpy.netsnmp import (
     VarBindList,
     Variable,
     fd_to_large_fd_set,
+    get_session_error_message,
     log_session_error,
     make_pdu_with_variables,
     make_request_pdu,
@@ -126,9 +127,11 @@ class SNMPSession:
         # original session struct will make a difference after this point.
         session_copy = _lib.snmp_open(session)
         if not session_copy:
-            # TODO: Raise a better exception
-            log_session_error("SNMPSession", session)
-            raise Exception("snmp_open")
+            error = get_session_error_message(session)
+            if session.s_errno > 0:
+                raise OSError(session.s_errno, error)
+            else:
+                raise SNMPError(f"snmp_open: {error}")
         self._original_session = session
         self.session = session_copy
         self.session_map[id(self)] = self
