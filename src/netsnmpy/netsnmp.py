@@ -5,6 +5,7 @@ from enum import Enum
 from ipaddress import IPv4Address, IPv6Address, ip_address
 from typing import Any, List, Union
 
+from netsnmpy import _netsnmp
 from netsnmpy.constants import (
     ASN_APP_DOUBLE,
     ASN_APP_FLOAT,
@@ -36,8 +37,6 @@ from netsnmpy.constants import (
     SNMP_NOSUCHOBJECT,
 )
 from netsnmpy.oids import OID
-
-from . import _netsnmp
 
 # Re-usable type annotations:
 OIDTuple = tuple[Union[int], ...]
@@ -281,6 +280,15 @@ def register_log_callback(enable_debug=False):
     _lib.netsnmp_register_loghandler(NETSNMP_LOGHANDLER_CALLBACK, LOG_DEBUG)
     if enable_debug:
         _lib.snmp_set_do_debugging(1)
+
+
+def get_session_error_message(session: _ffi.CData) -> str:
+    """Returns the last error message associated with the given SNMP session"""
+    pperrmsg = _ffi.new("char**")
+    _lib.snmp_error(session, _ffi.NULL, _ffi.NULL, pperrmsg)
+    errmsg = _ffi.string(pperrmsg[0]).decode("utf-8")
+    _lib.free(pperrmsg[0])
+    return errmsg
 
 
 def log_session_error(subsystem: str, session: _ffi.CData):

@@ -205,6 +205,9 @@ int           snprint_variable(char *buf, size_t buf_len,
 int           snprint_objid(char *buf, size_t buf_len,
                             const oid * objid, size_t objidlen);
 
+/* Some data allocated by Net-SNMP must be freed by the caller */
+void free(void *ptr);
+
 {_custom_typedefs}
 """
 
