@@ -28,6 +28,18 @@ async def test_it_should_getnext_sysdescr_from_localhost(simple_localhost_sessio
     assert value.startswith(b"ProCurve")
 
 
+def test_get_should_work_more_than_once(simple_localhost_session):
+    sys_descr_0 = netsnmp.symbol_to_oid("SNMPv2-MIB::sysDescr.0")
+    try:
+        simple_localhost_session.get(sys_descr_0)
+    except TimeoutError:
+        pytest.fail("first get() failed with TimeoutError")
+    try:
+        simple_localhost_session.get(sys_descr_0)
+    except TimeoutError:
+        pytest.fail("second get() failed with TimeoutError")
+
+
 def test_too_many_sessions_should_raise_sensible_exception(temporary_soft_limit):
     session_count = temporary_soft_limit + 10
     print(f"Opening {session_count} sessions")
