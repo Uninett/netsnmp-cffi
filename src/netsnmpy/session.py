@@ -11,6 +11,7 @@ from netsnmpy.constants import (
     SNMP_MSG_GETBULK,
     SNMP_MSG_GETNEXT,
     SNMP_MSG_SET,
+    SNMP_PORT,
     SNMP_VERSION_1,
     SNMP_VERSION_3,
     SNMPERR_TIMEOUT,
@@ -67,22 +68,59 @@ SNMP_VERSION_MAP = {
 }
 
 
-class SNMPSession:
+class Session:
     """A high-level wrapper around a Net-SNMP session"""
 
     # This keeps track of sessions to ensure the Net-SNMP callback function knows
     # which Python session object to associate incoming SNMP responses with
-    session_map: dict[int, "SNMPSession"] = {}
+    session_map: dict[int, "Session"] = {}
+
+    def __init__(self):
+        self.session = None
+        self._original_session = None
+        self._callback_data = None
+        self._futures: dict[int, Future] = {}
+
+    def callback(self, reqid: int, pdu: _ffi.CData):
+        """Handles incoming SNMP responses and updates futures.
+
+        Calls to this method are usually triggered by the global callback function,
+        when it has found the appropriate session object for an incoming response.
+        """
+        _log.debug("Got a callback for session with %s", self.host)
+        future = self._futures.pop(reqid, None)
+        if future is None:
+            _log.error("Received SNMP response for unknown request ID %s", reqid)
+            return
+
+        variables = parse_response_variables(pdu[0])
+        future.set_result(variables)
+
+    def close(self):
+        """Closes the SNMP session"""
+        if not self.session:
+            return
+        _lib.snmp_close(self.session)
+        self.session = None
+        self._original_session = None
+        self.session_map.pop(id(self), None)
+
+        update_event_loop()
+
+
+class SNMPSession(Session):
+    """A high-level wrapper around a Net-SNMP session"""
 
     def __init__(
         self,
         host: Host,
-        port: int = 161,
+        port: int = SNMP_PORT,
         community: str = "public",
         version: SnmpVersion = 1,
         timeout: float = 1.5,
         retries: int = 3,
     ):
+        super().__init__()
         self.host = host
         self.port = port
         self.community = community
@@ -91,10 +129,6 @@ class SNMPSession:
         self.version = version
         self.timeout = timeout
         self.retries = retries
-        self.session = None
-        self._original_session = None
-        self._callback_data = None
-        self._futures: dict[int, Future] = {}
 
     def open(self):
         """Opens the SNMP session"""
@@ -134,17 +168,6 @@ class SNMPSession:
         self._original_session = session
         self.session = session_copy
         self.session_map[id(self)] = self
-
-        update_event_loop()
-
-    def close(self):
-        """Closes the SNMP session"""
-        if not self.session:
-            return
-        _lib.snmp_close(self.session)
-        self.session = None
-        self._original_session = None
-        self.session_map.pop(id(self), None)
 
         update_event_loop()
 
@@ -245,21 +268,6 @@ class SNMPSession:
             raise TimeoutError()
         raise SNMPError(msg_fmt % msg_args)
 
-    def callback(self, reqid: int, pdu: _ffi.CData):
-        """Handles incoming SNMP responses and updates futures.
-
-        Calls to this method are usually triggered by the global callback function,
-        when it has found the appropriate session object for an incoming response.
-        """
-        _log.debug("Got a callback for session with %s", self.host)
-        future = self._futures.pop(reqid, None)
-        if future is None:
-            _log.error("Received SNMP response for unknown request ID %s", reqid)
-            return
-
-        variables = parse_response_variables(pdu[0])
-        future.set_result(variables)
-
     def handle_timeout(self, reqid: int):
         """Handles an SNMP timeout.
 
@@ -298,7 +306,7 @@ def _netsnmp_session_callback(
     to the correct Python session object.
     """
     callback_data = _ffi.cast("_callback_data*", magic)
-    session = SNMPSession.session_map.get(callback_data.session_id)
+    session = Session.session_map.get(callback_data.session_id)
     if session is None:
         _callback_log.error("Received SNMP response for unknown session")
         return 1
