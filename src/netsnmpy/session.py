@@ -1,3 +1,5 @@
+"""SNMP Session handling"""
+
 import asyncio
 import logging
 from asyncio import AbstractEventLoop, Future
