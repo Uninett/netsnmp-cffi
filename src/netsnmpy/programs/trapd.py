@@ -11,6 +11,7 @@ from signal import SIGINT, SIGTERM
 from typing import Union
 
 from netsnmpy import netsnmp, trapsession
+from netsnmpy.trapsession import SNMPTrap
 from netsnmpy.types import InterfaceTuple
 
 ADDRESS_PATTERNS = (re.compile(r"(?P<addr>[0-9.]+) (:(?P<port>[0-9]+))?$", re.VERBOSE),)
@@ -42,12 +43,17 @@ async def run(args):
     for addr in args.address:
         sess = trapsession.SNMPTrapSession(addr.address, addr.port)
         sess.open()
+        sess.add_observer(trap_observer)
 
     try:
         while True:
             await asyncio.sleep(1)
     except asyncio.CancelledError:
         pass
+
+
+def trap_observer(trap: SNMPTrap) -> None:
+    print(f"Received trap: {trap!r}")
 
 
 def parse_args():
