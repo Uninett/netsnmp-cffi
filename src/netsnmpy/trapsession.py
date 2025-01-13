@@ -2,6 +2,8 @@
 
 import logging
 from ipaddress import ip_address
+from socket import AF_INET, AF_INET6, inet_ntop
+from typing import Optional
 
 from netsnmpy import _netsnmp
 from netsnmpy.constants import (
@@ -12,16 +14,45 @@ from netsnmpy.constants import (
     SNMP_DEFAULT_TIMEOUT,
     SNMP_DEFAULT_VERSION,
     SNMP_SESS_UNKNOWNAUTH,
+    SNMP_TRAP_AUTHFAIL,
+    SNMP_TRAP_COLDSTART,
+    SNMP_TRAP_EGPNEIGHBORLOSS,
+    SNMP_TRAP_ENTERPRISESPECIFIC,
+    SNMP_TRAP_LINKDOWN,
+    SNMP_TRAP_LINKUP,
     SNMP_TRAP_PORT,
+    SNMP_TRAP_WARMSTART,
+    SNMP_VERSION_1,
+    SNMP_VERSION_2c,
 )
-from netsnmpy.errors import SNMPError
-from netsnmpy.netsnmp import parse_response_variables
+from netsnmpy.errors import SNMPError, UnsupportedSnmpVersionError
+from netsnmpy.netsnmp import VarBindList, parse_response_variables
+from netsnmpy.oids import OID
 from netsnmpy.session import Session, update_event_loop
 from netsnmpy.types import IPAddress
 
 _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib
 _log = logging.getLogger(__name__)
+
+# Local constants
+IPADDR_SIZE = 4
+IP6ADDR_SIZE = 16
+IPADDR_OFFSET = 4
+IP6ADDR_OFFSET = 8
+
+OBJID_SNMP_TRAPS = OID(".1.3.6.1.6.3.1.1.5")
+OBJID_SNMP_TRAP_OID = OID(".1.3.6.1.6.3.1.1.4.1.0")
+OBJID_SYSUPTIME = OID(".1.3.6.1.2.1.1.3.0")
+GENERIC_TRAP_TYPE_MAP = {
+    SNMP_TRAP_COLDSTART: "coldStart",
+    SNMP_TRAP_WARMSTART: "warmStart",
+    SNMP_TRAP_LINKDOWN: "linkDown",
+    SNMP_TRAP_LINKUP: "linkUp",
+    SNMP_TRAP_AUTHFAIL: "authenticationFailure",
+    SNMP_TRAP_EGPNEIGHBORLOSS: "egpNeighborLoss",
+    SNMP_TRAP_ENTERPRISESPECIFIC: "enterpriseSpecific",
+}
 
 
 class SNMPTrapSession(Session):
@@ -104,8 +135,154 @@ class SNMPTrapSession(Session):
 
         Calls to this method are usually triggered by the global callback function,
         when it has found the appropriate session object for an incoming response.
+
+        :param reqid: The request ID of the incoming PDU.  This is useless for trap
+                      PDUs, which are unsolicited, but the same callback interface is
+                      used for processing responses to outgoing requests, where the
+                      mapping a response to the correct request ID is important.
+        :param pdu: The incoming PDU.
         """
         _log.debug("Received a trap: %s", pdu)
-        variables = parse_response_variables(pdu[0])
-        _log.debug("Trap variables: %r", variables)
+        trap = SNMPTrap.from_pdu(pdu)
+        _log.debug("Parsed trap: %r", trap)
         update_event_loop()
+
+
+class SNMPTrap:
+    """A high-level representation of an SNMP trap or inform PDU, in a structure
+    agnostic to SNMP v1 and SNMP v2c differences.
+
+    The `source` and the `agent` may be different values: Source should be the source
+    IP address of the received packet, while SNMP v1 traps may additionally contain
+    an agent IP address in the PDU (i.e. the packet could be sent from `source` on
+    behalf of `agent`).  SNMP v2c traps do not have this distinction.
+    """
+
+    def __init__(
+        self,
+        source: IPAddress,
+        agent: IPAddress,
+        generic_type: str,
+        trap_oid: OID,
+        uptime: int,
+        community: str,
+        version: str,
+        variables: VarBindList,
+    ):
+        self.source = source
+        self.agent = agent
+        self.generic_type = generic_type
+        self.trap_oid = trap_oid
+        self.uptime = uptime
+        self.community = community
+        self.variables = variables
+        self.version = version
+
+    def __repr__(self):
+        return (
+            f"<SNMPTrap version={self.version!r} trap_oid={self.trap_oid!r} "
+            f"source={self.source!r} agent={self.agent!r} community={self.community!r} "
+            f"uptime={self.uptime!r} generic_type={self.generic_type!r} "
+            f"variables={self.variables}>"
+        )
+
+    @classmethod
+    def from_pdu(cls, pdu: _ffi.CData) -> "SNMPTrap":
+        """Creates an SNMPTrap object from a Net-SNMP pdu structure."""
+        variables = parse_response_variables(pdu[0])
+
+        source = cls.get_transport_addr(pdu)
+        agent_addr = generic_type = trap_oid = uptime = None
+        community = _ffi.string(pdu.community)
+
+        version = pdu.version
+        if version == SNMP_VERSION_1:
+            version = "1"
+            agent_addr = ip_address(".".join(str(octet) for octet in pdu.agent_addr))
+            trap_oid, generic_type = cls.get_v1_trap_type(pdu)
+            uptime = pdu.time
+        elif version == SNMP_VERSION_2c:
+            # TODO: This would be relevant also for SNMPv3 traps
+            version = "2c"
+            # SNMP v2c traps contain the sysuptime and trap oid values as part of its
+            # varbinds, so we pop them off the varbind list here:
+            for oid, value in variables[:]:
+                if oid == OBJID_SYSUPTIME:
+                    uptime = value
+                    variables.remove((oid, value))
+                elif oid == OBJID_SNMP_TRAP_OID:
+                    trap_oid = value
+                    variables.remove((oid, value))
+        else:
+            raise UnsupportedSnmpVersionError("Unsupported SNMP version", version)
+
+        return cls(
+            source=source,
+            agent=agent_addr,
+            generic_type=generic_type,
+            trap_oid=trap_oid,
+            uptime=uptime,
+            community=community,
+            version=version,
+            variables=variables,
+        )
+
+    @staticmethod
+    def get_transport_addr(pdu: _ffi.CData) -> Optional[IPAddress]:
+        """Retrieves the IP source address from the PDU's reference to an opaque
+        transport data struct.
+
+        Only works when assuming the opaque structure is sockaddr_in and
+        sockaddr_in6. It should be as long as we are only using an IPv4 or
+        IPv6-based netsnmp transport (the only ones supported by this library, anyway)
+
+        :returns: The source IP address of the trap, or None if it cannot be determined.
+        """
+        if pdu.transport_data_length <= 1:
+            return
+
+        # peek the first two bytes of the pdu's opaque transport data to determine
+        # socket address family (we are assuming the transport_data is a sockaddr_in
+        # or sockaddr_in6 structure and accessing it naughtily here)
+        family_p = _ffi.cast("unsigned short*", pdu.transport_data)
+        family = family_p[0]
+        if family not in (AF_INET, AF_INET6):
+            return
+
+        addr_size, offset = (
+            (IPADDR_SIZE, IPADDR_OFFSET)
+            if family == AF_INET
+            else (IP6ADDR_SIZE, IP6ADDR_OFFSET)
+        )
+
+        buffer = _ffi.cast("char*", pdu.transport_data)
+        data = _ffi.unpack(buffer, pdu.transport_data_length)
+        addr = data[offset : offset + addr_size]
+        return ip_address(inet_ntop(family, addr))
+
+    @staticmethod
+    def get_v1_trap_type(pdu: _ffi.CData) -> tuple[OID, str]:
+        """Transforms trap type information from an SNMP-v1 pdu to something that
+        is consistent with SNMP-v2c, as documented in RFC2576.
+
+        :returns: A tuple of (snmp_trap_oid, generic_type)
+
+        """
+        enterprise = OID(_ffi.unpack(pdu.enterprise, pdu.enterprise_length))
+        generic_type = pdu.trap_type
+
+        # According to RFC2576 "Coexistence between Version 1, Version 2,
+        # and Version 3 of the Internet-standard Network Management
+        # Framework", we build snmpTrapOID from the snmp-v1 trap by
+        # combining enterprise + 0 + specific trap parameter IF the
+        # generic trap parameter is 6. If not, the traps are defined as
+        # 1.3.6.1.6.3.1.1.5 + (generic trap parameter + 1)
+        if generic_type == SNMP_TRAP_ENTERPRISESPECIFIC:
+            snmp_trap_oid = enterprise + (0, pdu.specific_type)
+        else:
+            snmp_trap_oid = OBJID_SNMP_TRAPS + (generic_type + 1,)
+
+        generic_type = GENERIC_TRAP_TYPE_MAP.get(
+            generic_type, str(generic_type)
+        ).upper()
+        return snmp_trap_oid, generic_type
