@@ -1,8 +1,6 @@
 import asyncio
 import logging
 from asyncio import AbstractEventLoop, Future
-from ipaddress import IPv4Address, IPv6Address
-from typing import Union
 from weakref import WeakKeyDictionary
 
 from netsnmpy import _netsnmp
@@ -35,6 +33,7 @@ from netsnmpy.netsnmp import (
     snmp_select_info2,
 )
 from netsnmpy.oids import OID
+from netsnmpy.types import Host, SnmpVersion
 
 _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib
@@ -66,9 +65,6 @@ SNMP_VERSION_MAP = {
     "2p": SNMP_VERSION_2p,
     "2star": SNMP_VERSION_2star,
 }
-
-Host = Union[str, IPv4Address, IPv6Address]
-SnmpVersion = Union[str, int]
 
 
 class SNMPSession:
