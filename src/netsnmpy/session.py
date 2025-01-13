@@ -27,7 +27,6 @@ from netsnmpy.netsnmp import (
     Variable,
     fd_to_large_fd_set,
     get_session_error_message,
-    log_session_error,
     make_pdu_with_variables,
     make_request_pdu,
     parse_response_variables,
@@ -282,12 +281,6 @@ class SNMPSession(Session):
             return
 
         future.set_exception(TimeoutError())
-
-    def walk(self, oid):
-        raise NotImplementedError
-
-    def set(self, oid, value, type):
-        raise NotImplementedError
 
     def __del__(self):
         self.close()
