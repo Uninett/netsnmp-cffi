@@ -3,7 +3,7 @@
 import logging
 from ipaddress import ip_address
 from socket import AF_INET, AF_INET6, inet_ntop
-from typing import Optional
+from typing import Optional, Protocol
 
 from netsnmpy import _netsnmp
 from netsnmpy.constants import (
@@ -55,6 +55,10 @@ GENERIC_TRAP_TYPE_MAP = {
 }
 
 
+class SNMPTrapObserver(Protocol):
+    def __call__(self, trap: "SNMPTrap") -> None: ...
+
+
 class SNMPTrapSession(Session):
     """A high-level wrapper around a Net-SNMP trap daemon session"""
 
@@ -69,6 +73,7 @@ class SNMPTrapSession(Session):
         super().__init__()
         self.host = ip_address(host)
         self.port = port
+        self._observers = set()
 
     @property
     def address(self) -> str:
@@ -145,7 +150,23 @@ class SNMPTrapSession(Session):
         _log.debug("Received a trap: %s", pdu)
         trap = SNMPTrap.from_pdu(pdu)
         _log.debug("Parsed trap: %r", trap)
+        for observer in self._observers:
+            observer(trap)
         update_event_loop()
+
+    def add_observer(self, observer: SNMPTrapObserver) -> None:
+        """Adds an observer function.
+
+        The observer will be called whenever a trap is received.
+        """
+        self._observers.add(observer)
+
+    def remove_observer(self, observer: SNMPTrapObserver) -> None:
+        """Removes a previously added observer function"""
+        try:
+            self._observers.remove(observer)
+        except KeyError:
+            pass
 
 
 class SNMPTrap:
