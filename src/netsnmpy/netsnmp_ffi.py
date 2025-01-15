@@ -63,12 +63,40 @@ typedef struct variable_list {{
 }} netsnmp_variable_list;
 
 typedef struct snmp_pdu {{
+    long            version;
+    int             command;
     long            reqid;
     /** Error status (non_repeaters in GetBulk) */
     long            errstat;
     /** Error index (max_repetitions in GetBulk) */
     long            errindex;
+    u_long          time;
+
+    /**
+     * Transport-specific opaque data.  This replaces the IP-centric address
+     * field.
+     */
+
+    void           *transport_data;
+    int             transport_data_length;
+
     netsnmp_variable_list *variables;
+
+    /*
+     * SNMPv1 & SNMPv2c fields
+     */
+    u_char         *community;
+    size_t          community_len;
+
+    /*
+     * Trap information
+     */
+    oid            *enterprise;
+    size_t          enterprise_length;
+    long            trap_type;
+    long            specific_type;
+    unsigned char   agent_addr[4];
+
     ...;
 }} netsnmp_pdu;
 
@@ -135,6 +163,8 @@ struct snmp_session {{
     ...;
 }};
 
+typedef struct {{ ...; }} netsnmp_transport;
+
 typedef struct netsnmp_large_fd_set_s {{ ...; }} netsnmp_large_fd_set;
 
 /* Definitions needed for logging */
@@ -193,6 +223,25 @@ int             snmp_select_info2(int *, netsnmp_large_fd_set *,
 /* Statically declare our own session callback function */
 extern "Python"  int  _netsnmp_session_callback(int, netsnmp_session*, int,
                                                 netsnmp_pdu*, void*);
+
+/* Functions needed for setting up trap reception */
+void               init_snmp(const char *);
+void               init_usm(void);
+int                setup_engineID(u_char ** eidp, const char *text);
+void               netsnmp_udp_ctor(void);
+void               netsnmp_udpipv6_ctor(void);
+netsnmp_transport *netsnmp_tdomain_transport(const char *str,
+                                             int local,
+                                             const char *default_domain);
+int                netsnmp_ds_set_string(int storeid, int which,
+                                         const char *value);
+netsnmp_session   *snmp_add(netsnmp_session *,
+                            struct netsnmp_transport_s *,
+                            int (*fpre_parse) (netsnmp_session *,
+                                               struct netsnmp_transport_s
+                                               *, void *, int),
+                            int (*fpost_parse) (netsnmp_session *,
+                                                netsnmp_pdu *, int));
 
 /* MIB parsing functions */
 void         *snmp_parse_oid(const char *input,

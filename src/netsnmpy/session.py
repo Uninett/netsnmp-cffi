@@ -1,8 +1,9 @@
+"""SNMP Session handling"""
+
 import asyncio
 import logging
-from asyncio import Future
-from ipaddress import IPv4Address, IPv6Address
-from typing import Union
+from asyncio import AbstractEventLoop, Future
+from weakref import WeakKeyDictionary
 
 from netsnmpy import _netsnmp
 from netsnmpy.constants import (
@@ -12,6 +13,7 @@ from netsnmpy.constants import (
     SNMP_MSG_GETBULK,
     SNMP_MSG_GETNEXT,
     SNMP_MSG_SET,
+    SNMP_PORT,
     SNMP_VERSION_1,
     SNMP_VERSION_3,
     SNMPERR_TIMEOUT,
@@ -27,19 +29,21 @@ from netsnmpy.netsnmp import (
     Variable,
     fd_to_large_fd_set,
     get_session_error_message,
-    log_session_error,
     make_pdu_with_variables,
     make_request_pdu,
     parse_response_variables,
     snmp_select_info2,
 )
 from netsnmpy.oids import OID
+from netsnmpy.types import Host, SnmpVersion
 
 _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib
 _log = logging.getLogger(__name__)
 _callback_log = logging.getLogger(__name__ + ".callback")
-_fd_map = {}
+_loop_fd_map: WeakKeyDictionary[AbstractEventLoop, dict[int, "SNMPReader"]] = (
+    WeakKeyDictionary()
+)
 _timeout_timer: asyncio.TimerHandle = None
 
 # TODO: Move these constants to a separate module
@@ -64,26 +68,60 @@ SNMP_VERSION_MAP = {
     "2star": SNMP_VERSION_2star,
 }
 
-Host = Union[str, IPv4Address, IPv6Address]
-SnmpVersion = Union[str, int]
 
-
-class SNMPSession:
+class Session:
     """A high-level wrapper around a Net-SNMP session"""
 
     # This keeps track of sessions to ensure the Net-SNMP callback function knows
     # which Python session object to associate incoming SNMP responses with
-    session_map: dict[int, "SNMPSession"] = {}
+    session_map: dict[int, "Session"] = {}
+
+    def __init__(self):
+        self.session = None
+        self._original_session = None
+        self._callback_data = None
+        self._futures: dict[int, Future] = {}
+
+    def callback(self, reqid: int, pdu: _ffi.CData):
+        """Handles incoming SNMP responses and updates futures.
+
+        Calls to this method are usually triggered by the global callback function,
+        when it has found the appropriate session object for an incoming response.
+        """
+        _log.debug("Got a callback for session with %s", self.host)
+        future = self._futures.pop(reqid, None)
+        if future is None:
+            _log.error("Received SNMP response for unknown request ID %s", reqid)
+            return
+
+        variables = parse_response_variables(pdu[0])
+        future.set_result(variables)
+
+    def close(self):
+        """Closes the SNMP session"""
+        if not self.session:
+            return
+        _lib.snmp_close(self.session)
+        self.session = None
+        self._original_session = None
+        self.session_map.pop(id(self), None)
+
+        update_event_loop()
+
+
+class SNMPSession(Session):
+    """A high-level wrapper around a Net-SNMP session"""
 
     def __init__(
         self,
         host: Host,
-        port: int = 161,
+        port: int = SNMP_PORT,
         community: str = "public",
         version: SnmpVersion = 1,
         timeout: float = 1.5,
         retries: int = 3,
     ):
+        super().__init__()
         self.host = host
         self.port = port
         self.community = community
@@ -92,10 +130,6 @@ class SNMPSession:
         self.version = version
         self.timeout = timeout
         self.retries = retries
-        self.session = None
-        self._original_session = None
-        self._callback_data = None
-        self._futures: dict[int, Future] = {}
 
     def open(self):
         """Opens the SNMP session"""
@@ -135,17 +169,6 @@ class SNMPSession:
         self._original_session = session
         self.session = session_copy
         self.session_map[id(self)] = self
-
-        update_event_loop()
-
-    def close(self):
-        """Closes the SNMP session"""
-        if not self.session:
-            return
-        _lib.snmp_close(self.session)
-        self.session = None
-        self._original_session = None
-        self.session_map.pop(id(self), None)
 
         update_event_loop()
 
@@ -246,21 +269,6 @@ class SNMPSession:
             raise TimeoutError()
         raise SNMPError(msg_fmt % msg_args)
 
-    def callback(self, reqid: int, pdu: _ffi.CData):
-        """Handles incoming SNMP responses and updates futures.
-
-        Calls to this method are usually triggered by the global callback function,
-        when it has found the appropriate session object for an incoming response.
-        """
-        _log.debug("Got a callback for session with %s", self.host)
-        future = self._futures.pop(reqid, None)
-        if future is None:
-            _log.error("Received SNMP response for unknown request ID %s", reqid)
-            return
-
-        variables = parse_response_variables(pdu[0])
-        future.set_result(variables)
-
     def handle_timeout(self, reqid: int):
         """Handles an SNMP timeout.
 
@@ -275,12 +283,6 @@ class SNMPSession:
             return
 
         future.set_exception(TimeoutError())
-
-    def walk(self, oid):
-        raise NotImplementedError
-
-    def set(self, oid, value, type):
-        raise NotImplementedError
 
     def __del__(self):
         self.close()
@@ -299,7 +301,7 @@ def _netsnmp_session_callback(
     to the correct Python session object.
     """
     callback_data = _ffi.cast("_callback_data*", magic)
-    session = SNMPSession.session_map.get(callback_data.session_id)
+    session = Session.session_map.get(callback_data.session_id)
     if session is None:
         _callback_log.error("Received SNMP response for unknown session")
         return 1
@@ -345,22 +347,23 @@ def update_event_loop():
         _log.debug("No running event loop found, nothing to update")
         return
 
+    fd_map = _loop_fd_map.setdefault(loop, {})
     fds, timeout = snmp_select_info2()
     _log.debug("event loop settings: fds=%r, timeout=%r", fds, timeout)
     # Add missing Net-SNMP file descriptors to the event loop
     for fd in fds:
-        if fd not in _fd_map:
+        if fd not in fd_map:
             reader = SNMPReader(fd)
-            _fd_map[fd] = reader
+            fd_map[fd] = reader
             loop.add_reader(fd, reader)
 
     # Remove Net-SNMP file descriptors that have become obsolete
-    current = set(_fd_map.keys())
+    current = set(fd_map.keys())
     wanted = set(fds)
     to_remove = current - wanted
     for fd in to_remove:
         loop.remove_reader(fd)
-        del _fd_map[fd]
+        del fd_map[fd]
 
     # Handle Net-SNMP timeouts in a timely manner ;-)
     if _timeout_timer:
