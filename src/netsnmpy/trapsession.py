@@ -70,24 +70,10 @@ class SNMPTrapSession(Session):
         :param host: The IP address to listen to.
         :param port: The UDP port number to listen to.
         """
-        super().__init__()
+        super().__init__(host, port)
+        # This subclass requires the host to be given as an IP address
         self.host = ip_address(host)
-        self.port = port
         self._observers = set()
-
-    @property
-    def address(self) -> str:
-        if self.host.version == 6:
-            return f"[{self.host}]"
-        return str(self.host)
-
-    @property
-    def peer_name(self) -> str:
-        return f"{self.transport_domain}:{self.address}:{self.port}"
-
-    @property
-    def transport_domain(self) -> str:
-        return "udp" if self.host.version == 4 else "udp6"
 
     def open(self):
         """Opens the configured trap session and starts listening for traps."""
