@@ -251,12 +251,15 @@ struct enum_list {{
 }};
 
 struct tree {{
+    int             tc_index;
     struct enum_list *enums;
     ...;
 }};
 
 struct tree  *get_tree(const oid *, size_t, struct tree *);
 struct tree  *get_tree_head(void);
+const char   *get_tc_descriptor(int);
+
 void         *snmp_parse_oid(const char *input,
                              oid *objid, size_t *objidlen);
 void          netsnmp_init_mib(void);

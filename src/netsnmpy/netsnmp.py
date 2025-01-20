@@ -170,7 +170,12 @@ class SNMPVariable(NamedTuple):
 
     def __str__(self):
         enum_value = self.enum_value
-        value = f"{self.enum_value}({self.value})" if enum_value else self.value
+        if enum_value:
+            value = f"{self.enum_value}({self.value})"
+        elif self.textual_convention == "DisplayString":
+            value = f'{self.value.decode("utf-8")!r}'
+        else:
+            value = self.value
         return f"{self.symbolic_name} = {value}"
 
     @property
@@ -179,6 +184,14 @@ class SNMPVariable(NamedTuple):
         enum = get_enums_for_object(self.oid)
         if enum:
             return enum.get(self.value)
+
+    @property
+    def textual_convention(self) -> Optional[str]:
+        """Returns the textual convention of the variable's MIB object, if available"""
+        subtree = get_subtree_for_object(self.oid)
+        if subtree and subtree.tc_index > -1:
+            descr = _lib.get_tc_descriptor(subtree.tc_index)
+            return _ffi.string(descr).decode("utf-8")
 
     @property
     def symbolic_name(self) -> str:
