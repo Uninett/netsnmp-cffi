@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from asyncio import AbstractEventLoop, Future
+from ipaddress import ip_address
 from weakref import WeakKeyDictionary
 
 from netsnmpy import _netsnmp
@@ -76,11 +77,39 @@ class Session:
     # which Python session object to associate incoming SNMP responses with
     session_map: dict[int, "Session"] = {}
 
-    def __init__(self):
+    def __init__(
+        self,
+        host: Host,
+        port: int = SNMP_PORT,
+    ):
+        self.host = host
+        self.port = port
         self.session = None
         self._original_session = None
         self._callback_data = None
         self._futures: dict[int, Future] = {}
+
+    @property
+    def is_ipv6(self):
+        try:
+            ip = ip_address(self.host)
+        except ValueError:
+            return None
+        return ip.version == 6
+
+    @property
+    def address(self) -> str:
+        if self.is_ipv6:
+            return f"[{self.host}]"
+        return str(self.host)
+
+    @property
+    def peer_name(self) -> str:
+        return f"{self.transport_domain}:{self.address}:{self.port}"
+
+    @property
+    def transport_domain(self) -> str:
+        return "udp" if not self.is_ipv6 else "udp6"
 
     def callback(self, reqid: int, pdu: _ffi.CData):
         """Handles incoming SNMP responses and updates futures.
@@ -121,9 +150,7 @@ class SNMPSession(Session):
         timeout: float = 1.5,
         retries: int = 3,
     ):
-        super().__init__()
-        self.host = host
-        self.port = port
+        super().__init__(host, port)
         self.community = community
         if version not in SNMP_VERSION_MAP:
             raise ValueError(f"Invalid SNMP version: {version}")
@@ -146,9 +173,7 @@ class SNMPSession(Session):
         session.community = community_c
         session.community_len = len(community)
 
-        # TODO: This needs to be a bit more complicated for IPv6 compatibility:
-        peername = f"udp:{self.host}:{self.port}".encode("utf-8")
-        peername_c = _ffi.new("char[]", peername)
+        peername_c = _ffi.new("char[]", self.peer_name.encode("utf-8"))
         session.peername = peername_c
 
         # Set up the callback function to handle incoming SNMP responses

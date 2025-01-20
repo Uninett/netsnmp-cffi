@@ -29,9 +29,8 @@ async def run(args):
     except TimeoutError:
         print("Request timed out")
     else:
-        for oid, value in varbinds:
-            symbol = netsnmp.oid_to_symbol(oid)
-            print(f"{symbol} = {value}")
+        for varbind in varbinds:
+            print(varbind)
 
 
 def parse_args():

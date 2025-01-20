@@ -3,7 +3,7 @@
 import logging
 from enum import Enum
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import Any, List, Union
+from typing import Any, List, NamedTuple, Optional, Union
 
 from netsnmpy import _netsnmp
 from netsnmpy.constants import (
@@ -37,11 +37,12 @@ from netsnmpy.constants import (
     SNMP_NOSUCHOBJECT,
 )
 from netsnmpy.oids import OID
+from netsnmpy.types import IPAddress
 
 # Re-usable type annotations:
 OIDTuple = tuple[Union[int], ...]
 ObjectIdentifier = Union[tuple[Union[int, str], ...], str]
-VarBindList = List[tuple[OID, Any]]
+VarBindList = List["SNMPVariable"]
 
 _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib
@@ -153,6 +154,38 @@ class EndOfMibView(SNMPErrorValue):
         return "No more variables left in this MIB View (It is past the end of the MIB tree)"
 
 
+class SNMPVariable(NamedTuple):
+    """Represents an SNMP variable (or varbind, in low-level-speak).
+
+    A varbind is really just a tuple of an OID and a value, but the value can be
+    interpreted in light of how the variable is defined in the corresponding MIB.
+
+    E.g. the raw value might be an integer, but the MIB might define the variable as
+    an enumeration of string values, in which case the value can also be interpreted
+    as a string.
+    """
+
+    oid: OID
+    value: Optional[Union[int, str, bytes, OID, IPAddress, SNMPErrorValue]]
+
+    def __str__(self):
+        enum_value = self.enum_value
+        value = f"{self.enum_value}({self.value})" if enum_value else self.value
+        return f"{self.symbolic_name} = {value}"
+
+    @property
+    def enum_value(self) -> Optional[str]:
+        """Returns a symbolic representation of the variable's value, if possible"""
+        enum = get_enums_for_object(self.oid)
+        if enum:
+            return enum.get(self.value)
+
+    @property
+    def symbolic_name(self) -> str:
+        """Returns the symbolic name of the variable's OID"""
+        return oid_to_symbol(self.oid)
+
+
 def decode_oid(var: _ffi.CData) -> tuple[int]:
     return tuple(_ffi.unpack(var.val.objid, var.val_len // _U_LONG_SIZE))
 
@@ -192,7 +225,7 @@ DECODER_FUNCTION_MAP = {
 }
 
 
-def decode_variable(var: _ffi.CData) -> tuple[OID, Union[int, bytes, None]]:
+def decode_variable(var: _ffi.CData) -> SNMPVariable:
     """Decodes a variable binding from a Net-SNMP PDU to an equivalent Python object.
 
     :returns: A tuple of the variable OID and the decoded value.
@@ -201,8 +234,51 @@ def decode_variable(var: _ffi.CData) -> tuple[OID, Union[int, bytes, None]]:
     decode = DECODER_FUNCTION_MAP.get(var.type, None)
     if not decode:
         _log.debug("could not decode oid %s type %s", oid, var.type)
-        return oid, None
-    return oid, decode(var)
+        return SNMPVariable(oid, None)
+    return SNMPVariable(oid, decode(var))
+
+
+def get_enums_for_varbind(var: _ffi.CData) -> Optional[dict[int, str]]:
+    """Returns a dictionary of enumeration values for the given CData representing
+    a variable binding.
+
+    :returns: A ``dict`` if the MIB object is found and is defined as an enumeration,
+              otherwise ``None`` is returned.
+    """
+    return get_enums_for_object(var.name, var.name_length)
+
+
+def get_enums_for_object(
+    oid: Union[_ffi.CData, OID], oid_length: Optional[int] = None
+) -> Optional[dict[int, str]]:
+    """Returns a dictionary of enumeration values for the given object identifier,
+    based on loaded MIB data.
+
+    :param oid: The object identifier to look up.  This can be a CData object
+                representing a low level C value, or it can be a Python OID object.
+    :param oid_length: The length of the OID: Required if ``oid`` is a CData object.
+    :returns: A ``dict`` if the MIB object is found and is defined as an enumeration,
+              otherwise ``None`` is returned.
+    """
+    if isinstance(oid, OID):
+        oid_c = oid_to_c(oid)
+        oid_length = len(oid)
+    else:
+        oid_c = oid
+        if not oid_length:
+            raise ValueError("oid_length must be provided when oid is a CData object")
+
+    tree_head = _lib.get_tree_head()
+    subtree = _lib.get_tree(oid_c, oid_length, tree_head)
+    if not subtree or not subtree.enums:
+        return None
+
+    enum = {}
+    item = subtree.enums
+    while item:
+        enum[item.value] = _ffi.string(item.label).decode("utf-8")
+        item = item.next
+    return enum
 
 
 ENCODER_FUNCTION_MAP = {
@@ -235,8 +311,7 @@ def parse_response_variables(pdu: _ffi.CData) -> VarBindList:
     result = []
     var = pdu.variables
     while var:
-        oid, val = decode_variable(var)
-        result.append((tuple(oid), val))
+        result.append(decode_variable(var))
         var = var.next_variable
     return result
 
