@@ -243,7 +243,20 @@ netsnmp_session   *snmp_add(netsnmp_session *,
                             int (*fpost_parse) (netsnmp_session *,
                                                 netsnmp_pdu *, int));
 
-/* MIB parsing functions */
+/* structs and functions required for parsing/decoding MIB information */
+struct enum_list {{
+    struct enum_list *next;
+    int             value;
+    char           *label;
+}};
+
+struct tree {{
+    struct enum_list *enums;
+    ...;
+}};
+
+struct tree  *get_tree(const oid *, size_t, struct tree *);
+struct tree  *get_tree_head(void);
 void         *snmp_parse_oid(const char *input,
                              oid *objid, size_t *objidlen);
 void          netsnmp_init_mib(void);
