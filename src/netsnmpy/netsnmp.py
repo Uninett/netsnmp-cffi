@@ -215,7 +215,7 @@ def decode_bigint(var: _ffi.CData) -> int:
 
 def decode_string(var: _ffi.CData) -> bytes:
     if var.val_len:
-        return _ffi.string(var.val.bitstring, var.val_len)
+        return bytes(_ffi.buffer(var.val.bitstring, var.val_len))
     return b""
 
 
