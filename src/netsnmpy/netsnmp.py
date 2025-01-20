@@ -260,6 +260,29 @@ def get_enums_for_object(
     :returns: A ``dict`` if the MIB object is found and is defined as an enumeration,
               otherwise ``None`` is returned.
     """
+    subtree = get_subtree_for_object(oid, oid_length)
+    if not subtree or not subtree.enums:
+        return None
+
+    enum = {}
+    item = subtree.enums
+    while item:
+        enum[item.value] = _ffi.string(item.label).decode("utf-8")
+        item = item.next
+    return enum
+
+
+def get_subtree_for_object(
+    oid: Union[_ffi.CData, OID], oid_length: Optional[int] = None
+) -> Optional[_ffi.CData]:
+    """Returns a CData tree struct with MIB information about the supplied object ID,
+    based on loaded MIB data.
+
+    :param oid: The object identifier to look up.  This can be a CData object
+                representing a low level C value, or it can be a Python OID object.
+    :param oid_length: The length of the OID: Required if ``oid`` is a CData object.
+    :returns: An optional CData object representing a `struct tree` from Net-SNMP.
+    """
     if isinstance(oid, OID):
         oid_c = oid_to_c(oid)
         oid_length = len(oid)
@@ -270,15 +293,7 @@ def get_enums_for_object(
 
     tree_head = _lib.get_tree_head()
     subtree = _lib.get_tree(oid_c, oid_length, tree_head)
-    if not subtree or not subtree.enums:
-        return None
-
-    enum = {}
-    item = subtree.enums
-    while item:
-        enum[item.value] = _ffi.string(item.label).decode("utf-8")
-        item = item.next
-    return enum
+    return subtree
 
 
 ENCODER_FUNCTION_MAP = {
