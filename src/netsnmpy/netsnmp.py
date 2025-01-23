@@ -49,6 +49,7 @@ _lib = _netsnmp.lib
 _log = logging.getLogger(__name__)
 _U_LONG_SIZE = _ffi.sizeof("unsigned long")
 MAX_FD_SIZE = 2048
+TYPE_MODID = 24
 
 
 class ValueType(Enum):
@@ -307,6 +308,36 @@ def get_subtree_for_object(
     tree_head = _lib.get_tree_head()
     subtree = _lib.get_tree(oid_c, oid_length, tree_head)
     return subtree
+
+
+def get_loaded_mibs() -> List[str]:
+    """Returns a list of all loaded MIBs"""
+    # This is a roundabout way to get the list of loaded MIBs, as Net-SNMP doesn't
+    # provide public access to the module list (it can dump the list as debug messages,
+    # but that's it.
+    module_ids = set()
+
+    def traverse_tree(node):
+        if node.type == TYPE_MODID:
+            module_ids.add(node.modid)
+        if node.child_list:
+            traverse_tree(node.child_list)
+        if node.next_peer:
+            traverse_tree(node.next_peer)
+
+    # First, traverse the entire MIB tree (!) to collect distinct module IDs
+    head = _lib.get_tree_head()
+    if head:
+        traverse_tree(head)
+
+    # Now, convert the module IDs to module names
+    buffer = _ffi.new("char[]", 256)
+    module_names = []
+    for modid in module_ids:
+        _lib.module_name(modid, buffer)
+        module_names.append(_ffi.string(buffer).decode("utf-8"))
+
+    return module_names
 
 
 ENCODER_FUNCTION_MAP = {

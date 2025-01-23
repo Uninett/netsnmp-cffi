@@ -251,8 +251,36 @@ struct enum_list {{
 }};
 
 struct tree {{
-    int             tc_index;
-    struct enum_list *enums;
+    struct tree    *child_list;     /* list of children of this node */
+    struct tree    *next_peer;      /* Next node in list of peers */
+    struct tree    *next;   /* Next node in hashed list of names */
+    struct tree    *parent;
+    char           *label;  /* This node's textual name */
+    u_long          subid;  /* This node's integer subidentifier */
+    int             modid;  /* The module containing this node */
+    int             number_modules;
+    int            *module_list;    /* To handle multiple modules */
+    int             tc_index;       /* index into tclist (-1 if NA) */
+    int             type;   /* This node's object type */
+    int             access; /* This nodes access */
+    int             status; /* This nodes status */
+    struct enum_list *enums;        /* (optional) list of enumerated integers */
+    struct range_list *ranges;
+    struct index_list *indexes;
+    char           *augments;
+    struct varbind_list *varbinds;
+    char           *hint;
+    char           *units;
+    int             (*printomat) (u_char **, size_t *, size_t *, int,
+                                  const netsnmp_variable_list *,
+                                  const struct enum_list *, const char *,
+                                  const char *);
+    void            (*printer) (char *, const netsnmp_variable_list *, const struct enum_list *, const char *, const char *);   /* Value printing function */
+    char           *description;    /* description (a quoted string) */
+    char           *reference;    /* references (a quoted string) */
+    int             reported;       /* 1=report started in print_subtree... */
+    char           *defaultValue;
+    char	       *parseErrorString; /* Contains the error string if there are errors in parsing MIBs */
     ...;
 }};
 
@@ -269,6 +297,7 @@ int           snprint_variable(char *buf, size_t buf_len,
                                const netsnmp_variable_list * variable);
 int           snprint_objid(char *buf, size_t buf_len,
                             const oid * objid, size_t objidlen);
+char         *module_name(int, char *);
 
 /* Some data allocated by Net-SNMP must be freed by the caller */
 void free(void *ptr);
