@@ -49,6 +49,7 @@ _lib = _netsnmp.lib
 _log = logging.getLogger(__name__)
 _U_LONG_SIZE = _ffi.sizeof("unsigned long")
 MAX_FD_SIZE = 2048
+MAX_SYMBOL_LENGTH = MAX_NAME_LEN * 2
 TYPE_MODID = 24
 
 
@@ -109,10 +110,21 @@ def symbol_to_oid(symbol: ObjectIdentifier) -> OID:
 
 
 def oid_to_symbol(oid: OID) -> str:
-    """Looks up a symbolic name for `oid` from loaded MIBs"""
-    input = oid_to_c(oid)
-    buffer = _ffi.new("char[]", MAX_NAME_LEN)
-    _lib.snprint_objid(buffer, MAX_NAME_LEN, input, len(oid))
+    """Looks up a symbolic name for `oid` from loaded MIBs.
+
+    If the symbol cannot be fully translated, a string representation of `oid` is
+    returned.
+    """
+    oid_c = oid_to_c(oid)
+    buffer = _ffi.new("char[]", MAX_SYMBOL_LENGTH)
+    out_length = _lib.snprint_objid(buffer, MAX_SYMBOL_LENGTH, oid_c, len(oid))
+    if out_length < 0:
+        _log.error(
+            "C buffer (%s bytes) is too small to translate %s to symbol",
+            MAX_SYMBOL_LENGTH,
+            oid,
+        )
+        return str(oid)
     return _ffi.string(buffer).decode("utf-8")
 
 
