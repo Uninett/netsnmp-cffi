@@ -213,7 +213,7 @@ class SNMPVariable(NamedTuple):
 
 
 def decode_oid(var: _ffi.CData) -> tuple[int]:
-    return tuple(_ffi.unpack(var.val.objid, var.val_len // _U_LONG_SIZE))
+    return OID(_ffi.unpack(var.val.objid, var.val_len // _U_LONG_SIZE))
 
 
 def decode_ip_address(var: _ffi.CData) -> Union[IPv4Address, IPv6Address]:
