@@ -200,7 +200,7 @@ class SNMPTrap:
 
         source = cls.get_transport_addr(pdu)
         agent_addr = generic_type = trap_oid = uptime = None
-        community = _ffi.string(pdu.community)
+        community = _ffi.string(pdu.community).decode()
 
         version = pdu.version
         if version == SNMP_VERSION_1:
