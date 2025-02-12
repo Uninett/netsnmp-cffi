@@ -86,3 +86,22 @@ A few other helpful flags:
 - `keep` - do not delete the files in `changelog.d/`
 
 More information about [towncrier](https://towncrier.readthedocs.io).
+
+### Building binary wheels
+
+This package utilizes the API mode of CFFI, which means that it builds a small
+C shim to interface between the Net-SNMP library and Python.  This means that a
+small platform-dependent binary will be part of the wheels built from this
+package.
+
+In order to build wheels that should be compatible with at least several Linux
+distros and Python version combinations, and that are also uploadable to PyPI
+when making release, we utilize the
+[manylinux](https://github.com/pypa/manylinux) tool suite.
+
+Building the binary wheels should more or less be automated by a `make`
+command (see the [Makefile](./Makefile) itself for details):
+
+```shell
+make
+```
