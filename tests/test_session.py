@@ -19,13 +19,36 @@ async def test_when_host_is_unreachable_then_agent_should_raise_timeout():
         await sess.aget(sys_descr)
 
 
-async def test_it_should_getnext_sysdescr_from_localhost(simple_localhost_session):
+async def test_it_should_agetnext_sysdescr_from_localhost(simple_localhost_session):
     sys_descr = netsnmp.symbol_to_oid("SNMPv2-MIB::sysDescr")
     response = await simple_localhost_session.agetnext(sys_descr)
     assert len(response) == 1
     oid, value = response[0]
     assert sys_descr.is_a_prefix_of(oid)
     assert value.startswith(b"ProCurve")
+
+
+def test_it_should_getnext_sysdescr_from_localhost(simple_localhost_session):
+    sys_descr = netsnmp.symbol_to_oid("SNMPv2-MIB::sysDescr")
+    response = simple_localhost_session.getnext(sys_descr)
+    assert len(response) == 1
+    oid, value = response[0]
+    assert sys_descr.is_a_prefix_of(oid)
+    assert value.startswith(b"ProCurve")
+
+
+def test_it_should_bulkget_sysuptime_and_sysdescr_from_localhost(
+    simple_localhost_session,
+):
+    sys_descr = netsnmp.symbol_to_oid("SNMPv2-MIB::sysDescr")
+    uptime = netsnmp.symbol_to_oid("SNMPv2-MIB::sysUpTime")
+    response = simple_localhost_session.getbulk(
+        uptime, sys_descr, non_repeaters=1, max_repetitions=2
+    )
+    assert len(response) == 3
+    assert uptime.is_a_prefix_of(response[0][0])
+    assert sys_descr.is_a_prefix_of(response[1][0])
+    assert response[1][1].startswith(b"ProCurve")
 
 
 def test_get_should_work_more_than_once(simple_localhost_session):
@@ -63,6 +86,16 @@ def test_too_many_sessions_should_raise_sensible_exception(temporary_soft_limit)
                 sess.close()
 
     assert excinfo.value.errno == errno.EMFILE
+
+
+def test_when_snmp_version_is_invalid_it_should_raise_valueerror():
+    with pytest.raises(ValueError):
+        session.SNMPSession(host="localhost", port=161, version=666, community="public")
+
+
+#
+# Fixtures
+#
 
 
 @pytest.fixture
