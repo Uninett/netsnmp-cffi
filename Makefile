@@ -1,6 +1,6 @@
 # This Makefile simplifies manylinux binary wheel builds for uploads to PyPI
 # See https://github.com/pypa/manylinux
-.PHONY: all build docker-build
+.PHONY: all build docker-build py%
 IMAGENAME := netsnmp-cffi-build
 UID := $(shell id -u)
 
