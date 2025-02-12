@@ -11,6 +11,10 @@ replace PySNMP as the default SNMP library in [Zino
 focus mainly on functionality used by Zino (which for the most part means that
 SNMPv3 is not implemented yet).
 
+## Compatibility
+
+The library is intended to be compatible with Net-SNMP versions from 5.9 and
+newer, and with Python 3.9 and newer.
 
 ## Usage examples
 
