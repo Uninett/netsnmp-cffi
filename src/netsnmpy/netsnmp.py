@@ -5,7 +5,11 @@ from enum import Enum
 from ipaddress import IPv4Address, IPv6Address, ip_address
 from typing import Any, List, NamedTuple, Optional, Union
 
-from netsnmpy import _netsnmp
+try:
+    from netsnmpy import _netsnmp
+except ImportError:
+    raise ImportError("Cannot find the Net-SNMP shared library")
+
 from netsnmpy.constants import (
     ASN_APP_DOUBLE,
     ASN_APP_FLOAT,
