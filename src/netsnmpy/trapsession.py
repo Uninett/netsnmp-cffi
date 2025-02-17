@@ -90,7 +90,7 @@ class SNMPTrapSession(Session):
         _lib.setup_engineID(_ffi.NULL, _ffi.NULL)
         transport = _lib.netsnmp_tdomain_transport(self.peer_name.encode(), 1, b"udp")
         if not transport:
-            raise SNMPError(f"Unable to create transport {self.peername}")
+            raise SNMPError(f"Unable to create transport {self.peer_name}")
         # for some reason, cffi is picky about the type of the transport pointer,
         # even though it's the same type:
         transport = _ffi.cast("struct netsnmp_transport_s*", transport)
