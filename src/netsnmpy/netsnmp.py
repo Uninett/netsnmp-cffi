@@ -52,6 +52,9 @@ MAX_FD_SIZE = 2048
 MAX_SYMBOL_LENGTH = MAX_NAME_LEN * 2
 TYPE_MODID = 24
 
+MINIMAL_SUPPORTED_VERSION = (5, 9)
+MINIMAL_SUPPORTED_VERSION_STR = ".".join(str(n) for n in MINIMAL_SUPPORTED_VERSION)
+
 
 class ValueType(Enum):
     """Enumeration of SNMP variable types used by Net-SNMP"""
@@ -526,3 +529,11 @@ def fd_to_large_fd_set(fd: int) -> _ffi.CData:
     _lib.netsnmp_large_fd_set_init(fdset, MAX_FD_SIZE)
     _lib.netsnmp_large_fd_setfd(fd, fdset)
     return fdset
+
+
+_version = get_version()
+if _version < MINIMAL_SUPPORTED_VERSION:
+    raise RuntimeError(
+        f"Net-SNMP version {_version} is not supported. "
+        f"Minimum supported version is {MINIMAL_SUPPORTED_VERSION_STR}"
+    )
