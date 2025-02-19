@@ -1,0 +1,20 @@
+--- net-snmp.spec.orig	2025-02-19 12:49:31.267997230 +0000
++++ net-snmp.spec	2025-02-19 12:50:19.575190097 +0000
+@@ -68,6 +68,9 @@
+ Patch102:   net-snmp-5.9-python3.patch
+ Patch103:   net-snmp-5.9.1-python-usenumeric.patch
+
++# Make tests work with autoconf 2.72 on AlmaLinux manylinux image
++Patch666:   net-snmp-5.9-autoconf-version.patch
++
+ Requires:        %{name}-libs%{?_isa} = %{epoch}:%{version}-%{release}
+ Requires:        %{name}-agent-libs%{?_isa} = %{epoch}:%{version}-%{release}
+ # This is actually needed for the %%triggerun script but Requires(triggerun)
+@@ -250,6 +253,8 @@
+ %patch102 -p1
+ %patch103 -p1
+
++%patch666 -p1
++
+ # disable failing test - see https://bugzilla.redhat.com/show_bug.cgi?id=680697
+ rm testing/fulltests/default/T200*
