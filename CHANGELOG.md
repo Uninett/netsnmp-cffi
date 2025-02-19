@@ -11,13 +11,13 @@ changes for the upcoming release can be found in
 
 <!-- towncrier release notes start -->
 
-## [Unreleased]
+## [0.1.1] - 2025-02-19
 
-## Added
+### Added
 
 - Added tools to automatically build manylinux binary wheels.
 
-## Fixed
+### Fixed
 
 - Fixed `pyproject.toml` license attributes to conform with package build
   tools.
