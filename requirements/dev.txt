@@ -1,0 +1,8 @@
+# Tools that are useful for developers of this package
+-r test.txt
+build
+ipython
+pre-commit
+ruff
+towncrier
+twine

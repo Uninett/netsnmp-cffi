@@ -1,0 +1,8 @@
+# Tools that are required for testing of this package
+coverage
+pytest
+pytest-asyncio
+pytest-cov
+retry
+snmpsim>=1.0
+tox

@@ -32,23 +32,6 @@ dynamic = ["version"]
 [project.scripts]
 asnmpget = "netsnmpy.programs.asnmpget:main"
 
-[project.optional-dependencies]
-dev = [
-    "build",
-    "coverage",
-    "ipython",
-    "pre-commit",
-    "pytest",
-    "pytest-cov",
-    "pytest-asyncio",
-    "retry",
-    "ruff",
-    "snmpsim>=1.0",
-    "towncrier",
-    "tox",
-    "twine",
-]
-
 [tool.setuptools]
 include-package-data = true
 zip-safe = false
