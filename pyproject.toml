@@ -32,6 +32,29 @@ dynamic = ["version"]
 [project.scripts]
 asnmpget = "netsnmpy.programs.asnmpget:main"
 
+[dependency-groups]
+# Tools that are useful for developers of this package
+dev = [
+    "build",
+    "ipython",
+    "pre-commit",
+    "ruff",
+    "setuptools>=80.3.1",
+    "towncrier",
+    "twine",
+]
+# Tools that are required for testing of this package
+test = [
+    "coverage",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "retry",
+    "snmpsim>=1.0",
+    "tox",
+    "tox-uv",
+]
+
 [tool.setuptools]
 include-package-data = true
 zip-safe = false
