@@ -33,9 +33,11 @@ typedef unsigned short u_short;
 typedef unsigned char u_char;
 typedef unsigned int u_int;
 typedef unsigned long oid;
+typedef int... time_t;
+typedef int... suseconds_t;
 typedef struct timeval {{
-    long tv_sec;
-    long tv_usec;
+    time_t tv_sec;
+    suseconds_t tv_usec;
 }};
 
 
