@@ -11,8 +11,8 @@ from signal import SIGINT, SIGTERM
 from typing import Union
 
 from netsnmpy import netsnmp, trapsession
+from netsnmpy.annotations import InterfaceTuple
 from netsnmpy.trapsession import SNMPTrap
-from netsnmpy.types import InterfaceTuple
 
 ADDRESS_PATTERNS = (re.compile(r"(?P<addr>[0-9.]+) (:(?P<port>[0-9]+))?$", re.VERBOSE),)
 if socket.has_ipv6:
