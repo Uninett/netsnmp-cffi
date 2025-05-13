@@ -6,7 +6,7 @@ UID := $(shell id -u)
 
 all: build
 
-build: docker-build py39 py310 py311 py312
+build: dist docker-build py39 py310 py311 py312
 	docker run -u $(UID) -v $(PWD):/src -v $(PWD)/dist:/output $(IMAGENAME) /bin/bash -c "auditwheel repair /output/netsnmp_cffi**-linux*whl -w /output"
 
 py%: PYVER=$(subst py,cp,$@)
@@ -16,3 +16,7 @@ py%:
 
 docker-build:
 	cd docker ; docker build -t $(IMAGENAME) .
+
+dist:
+	# Ensure dist directory is created and owned by the current user
+	mkdir -p dist
