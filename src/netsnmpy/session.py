@@ -7,6 +7,7 @@ from ipaddress import ip_address
 from weakref import WeakKeyDictionary
 
 from netsnmpy import _netsnmp
+from netsnmpy.annotations import Host, SnmpVersion
 from netsnmpy.constants import (
     NETSNMP_CALLBACK_OP_RECEIVED_MESSAGE,
     NETSNMP_CALLBACK_OP_TIMED_OUT,
@@ -36,7 +37,6 @@ from netsnmpy.netsnmp import (
     snmp_select_info2,
 )
 from netsnmpy.oids import OID
-from netsnmpy.types import Host, SnmpVersion
 
 _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib

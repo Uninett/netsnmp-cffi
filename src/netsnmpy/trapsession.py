@@ -7,6 +7,7 @@ from socket import AF_INET, AF_INET6, inet_ntop
 from typing import Optional, Protocol
 
 from netsnmpy import _netsnmp
+from netsnmpy.annotations import IPAddress
 from netsnmpy.constants import (
     NETSNMP_DS_LIB_APPTYPE,
     NETSNMP_DS_LIBRARY_ID,
@@ -30,7 +31,6 @@ from netsnmpy.errors import SNMPError, UnsupportedSnmpVersionError
 from netsnmpy.netsnmp import VarBindList, parse_response_variables
 from netsnmpy.oids import OID
 from netsnmpy.session import Session, update_event_loop
-from netsnmpy.types import IPAddress
 
 _ffi = _netsnmp.ffi
 _lib = _netsnmp.lib

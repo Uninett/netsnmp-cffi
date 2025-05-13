@@ -10,6 +10,7 @@ try:
 except ImportError:
     raise ImportError("Cannot find the Net-SNMP shared library")
 
+from netsnmpy.annotations import IPAddress
 from netsnmpy.constants import (
     ASN_APP_DOUBLE,
     ASN_APP_FLOAT,
@@ -41,7 +42,6 @@ from netsnmpy.constants import (
     SNMP_NOSUCHOBJECT,
 )
 from netsnmpy.oids import OID
-from netsnmpy.types import IPAddress
 
 # Re-usable type annotations:
 OIDTuple = tuple[Union[int], ...]
