@@ -11,6 +11,20 @@ changes for the upcoming release can be found in
 
 <!-- towncrier release notes start -->
 
+## [0.1.2] - 2025-05-15
+
+### Added
+
+- Added 3.12 to list of supported Python versions
+
+### Fixed
+
+- Support trap origin discovery on BSD platforms ([#3](https://github.com/Uninett/netsnmp-cffi/issues/3))
+- Cleaned up project requirements specifications
+- Moved development and test requirements to `pyproject.toml`
+- Updated module metadata to be PEP-639 compliant
+
+
 ## [0.1.1] - 2025-02-19
 
 ### Added
