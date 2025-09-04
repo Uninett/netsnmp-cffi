@@ -17,7 +17,7 @@ async def _verify_localhost_snmp_response(port: int):
     from netsnmpy import session
 
     try:
-        sess = session.SNMPSession(host="localhost", port=port, version=2)
+        sess = session.SNMPSession(host="localhost", port=port, version=2, timeout=5)
         sess.open()
         sysobjectid0 = OID(".1.3.6.1.2.1.1.2.0")
         return await sess.aget(sysobjectid0)
@@ -42,6 +42,7 @@ async def snmpsim(snmpsimd_path, snmp_fixture_directory, snmp_test_port):
     @retry(Exception, tries=3, delay=0.5, backoff=2)
     async def _wait_for_snmpsimd():
         if await _verify_localhost_snmp_response(snmp_test_port):
+            print("snmpsimd is responding to queries")
             return True
         else:
             raise TimeoutError("Still waiting for snmpsimd to listen for queries")

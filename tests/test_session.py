@@ -102,7 +102,11 @@ def test_when_snmp_version_is_invalid_it_should_raise_valueerror():
 def simple_localhost_session(snmpsim, snmp_test_port):
     netsnmp.load_mibs()
     sess = session.SNMPSession(
-        host="localhost", port=snmp_test_port, version=2, community="public"
+        host="localhost",
+        port=snmp_test_port,
+        version=2,
+        community="public",
+        timeout=5,
     )
     sess.open()
     yield sess
