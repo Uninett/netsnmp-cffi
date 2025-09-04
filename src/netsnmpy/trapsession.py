@@ -4,7 +4,7 @@ import logging
 import platform
 from ipaddress import ip_address
 from socket import AF_INET, AF_INET6, inet_ntop
-from typing import Optional, Protocol
+from typing import Optional, Protocol, Union
 
 from netsnmpy import _netsnmp
 from netsnmpy.annotations import IPAddress
@@ -180,7 +180,7 @@ class SNMPTrap:
         generic_type: str,
         trap_oid: OID,
         uptime: int,
-        community: str,
+        community: Union[str, bytes],
         version: str,
         variables: VarBindList,
     ):
@@ -208,7 +208,14 @@ class SNMPTrap:
 
         source = cls.get_transport_addr(pdu)
         agent_addr = generic_type = trap_oid = uptime = None
-        community = _ffi.string(pdu.community).decode()
+        community = _ffi.string(pdu.community)
+        try:
+            community = community.decode("ascii")
+        except UnicodeDecodeError:
+            # SNMP communities are defined to be ASCII, but not every entity plays
+            # nice. If this is non-ascii, we'll keep the original bytestring as-is
+            # and leave it up to the client program to deal with it.
+            pass
 
         version = pdu.version
         if version == SNMP_VERSION_1:
