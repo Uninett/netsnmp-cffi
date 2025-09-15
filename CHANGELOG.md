@@ -17,7 +17,7 @@ changes for the upcoming release can be found in
 
 - Return raw community value bytestring rather than crashing trap handler if
   the incoming trap messages community cannot be decoded as ASCII
-  ([#9](https://github.com/Uninett/netsnmp-cffi/pulls/9))
+  ([#9](https://github.com/Uninett/netsnmp-cffi/pull/9))
 
 ## [0.1.2] - 2025-05-15
 
