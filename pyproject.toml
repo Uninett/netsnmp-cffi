@@ -27,7 +27,8 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-"Homepage" = "https://github.com/Uninett/netsnmp-cffi"
+"GitHub" = "https://github.com/Uninett/netsnmp-cffi"
+"Changelog" = "https://github.com/Uninett/netsnmp-cffi/blob/master/CHANGELOG.md"
 
 [project.scripts]
 asnmpget = "netsnmpy.programs.asnmpget:main"
