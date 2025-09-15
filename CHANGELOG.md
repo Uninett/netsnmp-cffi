@@ -11,6 +11,14 @@ changes for the upcoming release can be found in
 
 <!-- towncrier release notes start -->
 
+## [0.1.3] - 2025-09-15
+
+### Fixed
+
+- Return raw community value bytestring rather than crashing trap handler if
+  the incoming trap messages community cannot be decoded as ASCII
+  ([#9](https://github.com/Uninett/netsnmp-cffi/pulls/9))
+
 ## [0.1.2] - 2025-05-15
 
 ### Added
