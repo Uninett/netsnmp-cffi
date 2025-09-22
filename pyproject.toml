@@ -102,8 +102,6 @@ force-exclude = '''
 [tool.ruff]
 line-length = 88
 target-version = "py39"
-# Exclude files even when passed directly as argument (for MegaLinter)
-force-exclude = true
 
 
 [tool.coverage.report]
