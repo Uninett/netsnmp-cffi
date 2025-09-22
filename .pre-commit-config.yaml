@@ -12,12 +12,8 @@ repos:
     hooks:
         # Run the linter
     -   id: ruff
-        name: "Ruff: critical"
-        args: [
-          '--select=E9,F63,F7,F82',
-          '--output-format=full',
-          '--statistics'
-        ]
+        name: "Ruff linting"
+        args: [ --fix ]
         types: [file, python]
         # Run the formatter
     -   id: ruff-format
