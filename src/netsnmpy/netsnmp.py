@@ -193,7 +193,7 @@ class SNMPVariable(NamedTuple):
         if enum_value:
             value = f"{self.enum_value}({self.value})"
         elif self.textual_convention == "DisplayString":
-            value = f'{self.value.decode("utf-8")!r}'
+            value = f"{self.value.decode('utf-8')!r}"
         else:
             value = self.value
         return f"{self.symbolic_name} = {value}"
