@@ -1,3 +1,4 @@
+import asyncio
 import errno
 import gc
 import resource
@@ -129,3 +130,74 @@ def temporary_soft_limit():
         resource.setrlimit(resource.RLIMIT_NOFILE, (soft_limit, hard_limit))
     else:
         yield soft_limit
+
+
+async def test_session_close_should_cancel_the_pending_request():
+    """Test that closing a session cancels all pending requests."""
+    netsnmp.load_mibs()
+    # Create a session pointing to an unreachable host
+    sess = session.SNMPSession(
+        host="127.42.42.42",  # (Hopefully) unreachable host
+        port=1161,
+        version=2,
+        retries=0,  # No retries
+        timeout=10,  # Long timeout to ensure request is still pending
+    )
+    sess.open()
+
+    sys_descr = netsnmp.symbol_to_oid("SNMPv2-MIB::sysDescr.0")
+
+    # Start an async request that will hang
+    request_task = asyncio.create_task(sess.aget(sys_descr))
+
+    # Give the request a moment to be sent
+    await asyncio.sleep(0.1)
+
+    # Close the session while the request is pending
+    sess.close()
+
+    # The request should now raise CancelledError
+    with pytest.raises(asyncio.CancelledError):
+        await request_task
+
+    # Verify that the session has no pending futures
+    assert len(sess._futures) == 0
+
+
+async def test_session_close_should_cancel_all_pending_requests():
+    """Test that closing a session cancels multiple pending requests."""
+    netsnmp.load_mibs()
+    # Create a session pointing to an unreachable host
+    sess = session.SNMPSession(
+        host="127.42.42.42",  # (Hopefully) unreachable host
+        port=1161,
+        version=2,
+        retries=0,  # No retries
+        timeout=10,  # Long timeout to ensure requests are still pending
+    )
+    sess.open()
+
+    sys_descr = netsnmp.symbol_to_oid("SNMPv2-MIB::sysDescr.0")
+    sys_uptime = netsnmp.symbol_to_oid("SNMPv2-MIB::sysUpTime.0")
+    sys_name = netsnmp.symbol_to_oid("SNMPv2-MIB::sysName.0")
+
+    # Start multiple async requests that will hang
+    tasks = [
+        asyncio.create_task(sess.aget(sys_descr)),
+        asyncio.create_task(sess.aget(sys_uptime)),
+        asyncio.create_task(sess.aget(sys_name)),
+    ]
+
+    # Give the requests a moment to be sent
+    await asyncio.sleep(0.1)
+
+    # Close the session while the requests are pending
+    sess.close()
+
+    # All requests should now raise CancelledError
+    for task in tasks:
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    # Verify that the session has no pending futures
+    assert len(sess._futures) == 0
