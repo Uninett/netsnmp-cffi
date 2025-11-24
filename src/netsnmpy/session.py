@@ -130,12 +130,28 @@ class Session:
         """Closes the SNMP session"""
         if not self.session:
             return
+
+        # Tearing down the session will freeze all coroutines awaiting any pending requests, since the callbacks from
+        # Net-SNMP will never arrive: Any pending futures must be cancelled at this point.
+        self._cancel_pending_futures()
+
         _lib.snmp_close(self.session)
         self.session = None
         self._original_session = None
         self.session_map.pop(id(self), None)
 
         update_event_loop()
+
+    def _cancel_pending_futures(self):
+        """Cancels all pending futures (i.e. pending requests).
+
+        This will cause all pending futures to raise asyncio.CancelledError when awaited.
+        """
+        for reqid, future in self._futures.items():
+            if not future.done():
+                _log.debug("Cancelling pending request %s due to session close", reqid)
+                future.cancel()
+        self._futures.clear()
 
 
 class SNMPSession(Session):
