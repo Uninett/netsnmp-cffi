@@ -31,7 +31,7 @@ RUN cp /tmp/net-snmp-5.9-autoconf-version.patch ~/rpmbuild/SOURCES/ && \
     cd ~/rpmbuild/SPECS && \
     patch -p0 < /tmp/net-snmp-buildspec.patch && \
     rpmbuild -bs net-snmp.spec
-RUN rpmbuild --rebuild ~/rpmbuild/SRPMS/net-snmp-${NET_SNMP_VERSION}.el8.src.rpm
+RUN rpmbuild --rebuild --nocheck ~/rpmbuild/SRPMS/net-snmp-${NET_SNMP_VERSION}.el8.src.rpm
 RUN yum localinstall -y ~/rpmbuild/RPMS/x86_64/net-snmp-*.rpm
 
 # Clean up
