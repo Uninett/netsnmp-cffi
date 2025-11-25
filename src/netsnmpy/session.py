@@ -149,7 +149,11 @@ class Session:
         """
         for reqid, future in self._futures.items():
             if not future.done():
-                _log.debug("Cancelling pending request %s due to session close", reqid)
+                _log.debug(
+                    "Cancelling pending request %s to %s due to session close",
+                    reqid,
+                    self.host,
+                )
                 future.cancel()
         self._futures.clear()
 
