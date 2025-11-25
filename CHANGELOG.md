@@ -11,6 +11,13 @@ changes for the upcoming release can be found in
 
 <!-- towncrier release notes start -->
 
+## [0.1.4] - 2025-11-25
+
+### Fixed
+
+- Cancel pending futures/requests when session is closed, in order to avoid
+  stuck coroutines ([#16](https://github.com/Uninett/netsnmp-cffi/issues/16))
+
 ## [0.1.3] - 2025-09-15
 
 ### Fixed
