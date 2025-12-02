@@ -250,6 +250,8 @@ netsnmp_transport *netsnmp_tdomain_transport(const char *str,
                                              const char *default_domain);
 int                netsnmp_ds_set_string(int storeid, int which,
                                          const char *value);
+int                netsnmp_ds_set_boolean(int storeid, int which, int value);
+int                netsnmp_ds_set_int(int storeid, int which, int value);
 netsnmp_session   *snmp_add(netsnmp_session *,
                             struct netsnmp_transport_s *,
                             int (*fpre_parse) (netsnmp_session *,
