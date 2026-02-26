@@ -1,0 +1,1 @@
+Add `lru_cache` to `symbol_to_oid`, `oid_to_symbol`, and `get_subtree_for_object` to speed up repeated MIB lookups. Add `get_enums_from_subtree` and `get_tc_descriptor_from_subtree` helpers to allow callers to reuse an already-looked-up subtree pointer.

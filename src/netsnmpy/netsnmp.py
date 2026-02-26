@@ -2,6 +2,7 @@
 
 import logging
 from enum import Enum
+from functools import lru_cache
 from ipaddress import IPv4Address, IPv6Address, ip_address
 from typing import Any, List, NamedTuple, Optional, Union
 
@@ -103,8 +104,11 @@ def oid_to_c(oid: OIDTuple) -> _ffi.CData:
 
 def symbol_to_oid(symbol: ObjectIdentifier) -> OID:
     """Converts an object identifier to a tuple of integers"""
-    symbol = identifier_to_string(symbol)
+    return _symbol_to_oid_cached(identifier_to_string(symbol))
 
+
+@lru_cache(maxsize=4096)
+def _symbol_to_oid_cached(symbol: str) -> OID:
     buffer = _ffi.new(f"oid[{MAX_OID_LEN}]")
     buffer_length = _ffi.new("size_t*", MAX_OID_LEN)
     input = _ffi.new("char[]", symbol.encode("utf-8"))
@@ -116,6 +120,7 @@ def symbol_to_oid(symbol: ObjectIdentifier) -> OID:
     return OID(_ffi.unpack(buffer, buffer_length[0]))
 
 
+@lru_cache(maxsize=16384)
 def oid_to_symbol(oid: OID) -> str:
     """Looks up a symbolic name for `oid` from loaded MIBs.
 
@@ -294,6 +299,15 @@ def get_enums_for_object(
               otherwise ``None`` is returned.
     """
     subtree = get_subtree_for_object(oid, oid_length)
+    return get_enums_from_subtree(subtree)
+
+
+def get_enums_from_subtree(subtree: Optional[_ffi.CData]) -> Optional[dict[int, str]]:
+    """Returns a dictionary of enumeration values from an already-looked-up MIB subtree node.
+
+    :param subtree: A CData ``struct tree`` pointer, as returned by :func:`get_subtree_for_object`.
+    :returns: A ``dict`` if the subtree is defined as an enumeration, otherwise ``None``.
+    """
     if not subtree or not subtree.enums:
         return None
 
@@ -317,16 +331,32 @@ def get_subtree_for_object(
     :returns: An optional CData object representing a `struct tree` from Net-SNMP.
     """
     if isinstance(oid, OID):
-        oid_c = oid_to_c(oid)
-        oid_length = len(oid)
-    else:
-        oid_c = oid
-        if not oid_length:
-            raise ValueError("oid_length must be provided when oid is a CData object")
+        return _get_subtree_cached(oid)
+
+    if not oid_length:
+        raise ValueError("oid_length must be provided when oid is a CData object")
 
     tree_head = _lib.get_tree_head()
-    subtree = _lib.get_tree(oid_c, oid_length, tree_head)
-    return subtree
+    return _lib.get_tree(oid, oid_length, tree_head)
+
+
+@lru_cache(maxsize=16384)
+def _get_subtree_cached(oid: OID) -> Optional[_ffi.CData]:
+    oid_c = oid_to_c(oid)
+    tree_head = _lib.get_tree_head()
+    return _lib.get_tree(oid_c, len(oid), tree_head)
+
+
+def get_tc_descriptor_from_subtree(subtree: Optional[_ffi.CData]) -> Optional[str]:
+    """Returns the textual convention descriptor from an already-looked-up MIB subtree node.
+
+    :param subtree: A CData ``struct tree`` pointer, as returned by :func:`get_subtree_for_object`.
+    :returns: The textual convention name as a string, or ``None``.
+    """
+    if subtree and subtree.tc_index > -1:
+        descr = _lib.get_tc_descriptor(subtree.tc_index)
+        return _ffi.string(descr).decode("utf-8")
+    return None
 
 
 def get_loaded_mibs() -> List[str]:

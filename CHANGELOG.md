@@ -10,6 +10,11 @@ changes for the upcoming release can be found in
 <https://github.com/Uninett/netsnmp-cffi/tree/master/changelog.d/>.
 
 <!-- towncrier release notes start -->
+## [Unreleased]
+
+### Fixed
+
+- Add caching hot-path MIB lookup function results
 
 ## [0.1.4] - 2025-11-25
 
