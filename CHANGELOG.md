@@ -10,7 +10,7 @@ changes for the upcoming release can be found in
 <https://github.com/Uninett/netsnmp-cffi/tree/master/changelog.d/>.
 
 <!-- towncrier release notes start -->
-## [Unreleased]
+## [0.1.5] - 2026-02-26
 
 ### Fixed
 
