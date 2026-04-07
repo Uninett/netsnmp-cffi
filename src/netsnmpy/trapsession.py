@@ -202,11 +202,25 @@ class SNMPTrap:
         )
 
     @classmethod
-    def from_pdu(cls, pdu: _ffi.CData) -> "SNMPTrap":
-        """Creates an SNMPTrap object from a Net-SNMP pdu structure."""
+    def from_pdu(
+        cls,
+        pdu: _ffi.CData,
+        source_override: Optional[IPAddress] = None,
+    ) -> "SNMPTrap":
+        """Creates an SNMPTrap object from a Net-SNMP pdu structure.
+
+        :param pdu: A pointer to a Net-SNMP pdu structure.
+        :param source_override: Optional source IP address to use instead of extracting the source
+            from the PDU's transport data.  This is useful when the PDU has been parsed from raw
+            bytes (e.g. from a trap multiplexer) where there is no transport data attached to the
+            PDU.
+        """
         variables = parse_response_variables(pdu[0])
 
-        source = cls.get_transport_addr(pdu)
+        if source_override is not None:
+            source = source_override
+        else:
+            source = cls.get_transport_addr(pdu)
         agent_addr = generic_type = trap_oid = uptime = None
         community = _ffi.string(pdu.community)
         try:
@@ -309,3 +323,32 @@ class SNMPTrap:
             generic_type, str(generic_type)
         ).upper()
         return snmp_trap_oid, generic_type
+
+
+def parse_raw_trap(data: bytes, source_addr: IPAddress) -> SNMPTrap:
+    """Parse a raw BER-encoded SNMP packet into an SNMPTrap.
+
+    This is useful for decoding trap packets received from an SNMP trap multiplexer
+    like straps/nmtrapd, where the raw SNMP packet bytes and the original source address
+    are provided separately.
+
+    :param data: Raw BER-encoded SNMP message bytes.
+    :param source_addr: Original trap sender IP address (e.g. from straps/nmtrapd header).
+    :return: A parsed SNMPTrap object.
+    :raises ValueError: If the SNMP packet cannot be parsed.
+    """
+    if not data:
+        raise ValueError("Cannot parse empty SNMP data")
+
+    sess = _ffi.new("netsnmp_session *")
+    _lib.snmp_sess_init(sess)
+
+    pdu = _lib.snmp_pdu_create(0)
+    try:
+        buf = _ffi.from_buffer("u_char[]", data)
+        rc = _lib.snmp_parse(_ffi.NULL, sess, pdu, buf, len(data))
+        if rc != 0:
+            raise ValueError(f"Failed to parse SNMP PDU (snmp_parse returned {rc})")
+        return SNMPTrap.from_pdu(pdu, source_override=ip_address(source_addr))
+    finally:
+        _lib.snmp_free_pdu(pdu)

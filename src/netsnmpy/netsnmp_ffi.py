@@ -258,6 +258,13 @@ netsnmp_session   *snmp_add(netsnmp_session *,
                             int (*fpost_parse) (netsnmp_session *,
                                                 netsnmp_pdu *, int));
 
+/* Function for parsing raw SNMP packets from bytes */
+int                snmp_parse(void *,
+                              netsnmp_session *,
+                              netsnmp_pdu *,
+                              u_char *,
+                              size_t);
+
 /* structs and functions required for parsing/decoding MIB information */
 struct enum_list {{
     struct enum_list *next;
