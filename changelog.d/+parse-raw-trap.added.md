@@ -1,1 +1,0 @@
-Added `parse_raw_trap()` function to decode raw BER-encoded SNMP packets into `SNMPTrap` objects (for example, for use with SNMP trap multiplexers like straps/nmtrapd).

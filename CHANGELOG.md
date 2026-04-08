@@ -10,6 +10,14 @@ changes for the upcoming release can be found in
 <https://github.com/Uninett/netsnmp-cffi/tree/master/changelog.d/>.
 
 <!-- towncrier release notes start -->
+
+## [0.2.0] - 2026-04-08
+
+### Added
+
+- Added `parse_raw_trap()` function to decode raw BER-encoded SNMP packets into `SNMPTrap` objects (for example, for use with SNMP trap multiplexers like straps/nmtrapd).
+
+
 ## [0.1.5] - 2026-02-26
 
 ### Fixed
