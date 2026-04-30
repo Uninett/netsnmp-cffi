@@ -51,7 +51,7 @@ test = [
     "pytest-asyncio",
     "pytest-cov",
     "retry",
-    "snmpsim>=1.0,!=1.1.6",
+    "snmpsim>=1.0,!=1.1.6,!=1.2.2",
     "pyasyncore; python_version >= '3.12'",
     "tox",
     "tox-uv",
