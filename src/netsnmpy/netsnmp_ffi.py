@@ -270,6 +270,7 @@ struct enum_list {{
     struct enum_list *next;
     int             value;
     char           *label;
+    ...;
 }};
 
 struct tree {{
