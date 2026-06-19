@@ -11,6 +11,17 @@ changes for the upcoming release can be found in
 
 <!-- towncrier release notes start -->
 
+## [0.2.1] - 2026-06-19
+
+### Fixed
+
+- Fix `ffi.error` from a size mismatch between the cdef and the real C layout of `struct enum_list`, by marking the cdef declaration as flexible. The mismatch caused crashes on platforms where CFFI verifies struct sizes against the C compiler (e.g. NetBSD/pkgsrc builds of net-snmp), any time MIB enumerations were looked up. ([#23](https://github.com/Uninett/netsnmp-cffi/issues/23))
+
+### Added
+
+- Test suite now also tests on Python 3.13 and 3.14.
+- Wheel build/publish process also builds wheels for Python 3.13 and 3.14.
+
 ## [0.2.0] - 2026-04-08
 
 ### Added
