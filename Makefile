@@ -6,7 +6,7 @@ UID := $(shell id -u)
 
 all: build
 
-build: dist docker-build py39 py310 py311 py312
+build: dist docker-build py39 py310 py311 py312 py313 py314
 	docker run -u $(UID) -v $(PWD):/src -v $(PWD)/dist:/output $(IMAGENAME) /bin/bash -c "auditwheel repair /output/netsnmp_cffi**-linux*whl -w /output"
 
 py%: PYVER=$(subst py,cp,$@)
