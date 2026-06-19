@@ -10,12 +10,12 @@ RUN yum update -y && \
     yum install -y wget rpm-build rpmdevtools yum-utils gcc gcc-toolset-14-annobin-plugin-gcc.x86_64 make && \
     yum groupinstall -y "Development Tools"
 
-ENV NET_SNMP_VERSION=5.9.1-17
+ENV NET_SNMP_VERSION=5.9.1-21
 
 RUN rpmdev-setuptree
 
 # Fetch net-snmp from a newer AlmaLinux repository
-RUN wget https://repo.almalinux.org/vault/9/AppStream/Source/Packages/net-snmp-${NET_SNMP_VERSION}.el9.src.rpm && \
+RUN wget https://vault.almalinux.org/9/AppStream/Source/Packages/net-snmp-${NET_SNMP_VERSION}.el9.src.rpm && \
     rpm -ivh net-snmp-${NET_SNMP_VERSION}.el9.src.rpm
 
 # Install the build dependencies
