@@ -3,6 +3,8 @@ import errno
 import gc
 import resource
 from contextlib import closing
+from unittest.mock import Mock
+from weakref import WeakKeyDictionary
 
 import pytest
 
@@ -109,6 +111,23 @@ def test_when_session_is_closed_outside_running_loop_then_requests_on_a_new_sess
         second_fds, _ = netsnmp.snmp_select_info2()
         assert second_fds == first_fds, "second session did not reuse the fd"
         private_event_loop.run_until_complete(second.aget(sys_uptime))
+
+
+async def test_when_event_loop_refuses_to_monitor_an_fd_then_it_should_not_be_recorded_as_monitored(
+    monkeypatch,
+):
+    unusable_fd = 4242
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(session, "_loop_fd_map", WeakKeyDictionary())
+    monkeypatch.setattr(session, "snmp_select_info2", lambda: ([unusable_fd], None))
+    monkeypatch.setattr(
+        loop, "add_reader", Mock(side_effect=OSError(errno.EBADF, "Bad fd"))
+    )
+
+    with pytest.raises(OSError):
+        session.update_event_loop()
+
+    assert unusable_fd not in session._loop_fd_map.get(loop, {})
 
 
 #

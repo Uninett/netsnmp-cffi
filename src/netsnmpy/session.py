@@ -400,10 +400,11 @@ def update_event_loop():
     # Add missing Net-SNMP file descriptors to the event loop
     fd_map = _loop_fd_map.setdefault(loop, {})
     for fd in fds:
-        if fd not in fd_map:
-            reader = SNMPReader(fd)
-            fd_map[fd] = reader
-            loop.add_reader(fd, reader)
+        if fd in fd_map:
+            continue
+        reader = SNMPReader(fd)
+        loop.add_reader(fd, reader)
+        fd_map[fd] = reader
 
     # Handle Net-SNMP timeouts in a timely manner ;-)
     if _timeout_timer:
