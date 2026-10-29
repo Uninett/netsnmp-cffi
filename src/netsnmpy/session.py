@@ -382,33 +382,28 @@ class SNMPReader:
 
 
 def update_event_loop():
-    """Ensures the asyncio event loop is informed on which file descriptors to monitor
-    for Net-SNMP events.
+    """Ensures the running asyncio event loop, if any, is informed on which file
+    descriptors to monitor for Net-SNMP events, and that no known event loop keeps
+    monitoring descriptors Net-SNMP no longer uses.
     """
     global _timeout_timer
+    fds, timeout = snmp_select_info2()
+    _log.debug("event loop settings: fds=%r, timeout=%r", fds, timeout)
+    _remove_obsolete_readers(wanted=set(fds))
+
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        _log.debug("No running event loop found, nothing to update")
+        _log.debug("No running event loop found, nothing more to update")
         return
 
-    fd_map = _loop_fd_map.setdefault(loop, {})
-    fds, timeout = snmp_select_info2()
-    _log.debug("event loop settings: fds=%r, timeout=%r", fds, timeout)
     # Add missing Net-SNMP file descriptors to the event loop
+    fd_map = _loop_fd_map.setdefault(loop, {})
     for fd in fds:
         if fd not in fd_map:
             reader = SNMPReader(fd)
             fd_map[fd] = reader
             loop.add_reader(fd, reader)
-
-    # Remove Net-SNMP file descriptors that have become obsolete
-    current = set(fd_map.keys())
-    wanted = set(fds)
-    to_remove = current - wanted
-    for fd in to_remove:
-        loop.remove_reader(fd)
-        del fd_map[fd]
 
     # Handle Net-SNMP timeouts in a timely manner ;-)
     if _timeout_timer:
@@ -416,6 +411,23 @@ def update_event_loop():
         _timeout_timer = None
     if timeout is not None:
         _timeout_timer = loop.call_later(timeout, check_for_timeouts)
+
+
+def _remove_obsolete_readers(wanted: set[int]):
+    """Stops every known event loop from monitoring Net-SNMP file descriptors that are
+    no longer in use, whether those loops are running or not.
+
+    A session may be closed while no loop is running.  If a loop were left monitoring
+    the closed descriptor, a new socket reusing that descriptor number would never be
+    monitored.  Closed loops are forgotten entirely.
+    """
+    for loop, fd_map in list(_loop_fd_map.items()):
+        if loop.is_closed():
+            _loop_fd_map.pop(loop, None)
+            continue
+        for fd in set(fd_map) - wanted:
+            loop.remove_reader(fd)
+            fd_map.pop(fd, None)
 
 
 def check_for_timeouts():
