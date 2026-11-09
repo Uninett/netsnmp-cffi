@@ -4,7 +4,8 @@
 IMAGENAME := netsnmp-cffi-build
 UID := $(shell id -u)
 # The sdist is built from a pristine checkout of HEAD, so untracked files in
-# the working tree cannot leak into it.
+# the working tree cannot leak into it. Every wheel is then built from that
+# sdist, which also proves the sdist is complete enough to build from.
 CLEANSRC := build/clean-src
 SDISTDIR := build/sdist
 
@@ -22,9 +23,9 @@ sdist: dist
 	cp $(SDISTDIR)/*.tar.gz dist/
 
 py%: PYVER=$(subst py,cp,$@)
-py%:
+py%: sdist
 	@echo "Building for $@"
-	docker run -u $(UID) -v $(PWD):/src -v $(PWD)/dist:/output $(IMAGENAME) /opt/python/$(PYVER)-$(PYVER)/bin/pip wheel /src -w /output
+	docker run -u $(UID) -v $(PWD)/$(SDISTDIR):/sdist:ro -v $(PWD)/dist:/output $(IMAGENAME) /bin/bash -c "/opt/python/$(PYVER)-$(PYVER)/bin/pip wheel /sdist/*.tar.gz -w /output"
 
 docker-build:
 	cd docker ; docker build -t $(IMAGENAME) .
