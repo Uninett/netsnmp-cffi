@@ -25,7 +25,7 @@ sdist: dist
 py%: PYVER=$(subst py,cp,$@)
 py%: sdist
 	@echo "Building for $@"
-	docker run -u $(UID) -v $(PWD)/$(SDISTDIR):/sdist:ro -v $(PWD)/dist:/output $(IMAGENAME) /bin/bash -c "/opt/python/$(PYVER)-$(PYVER)/bin/pip wheel /sdist/*.tar.gz -w /output"
+	docker run -u $(UID) -v $(PWD)/$(SDISTDIR):/sdist:ro -v $(PWD)/dist:/output $(IMAGENAME) /bin/bash -c "/opt/python/$(PYVER)-$(PYVER)/bin/pip wheel --no-deps /sdist/*.tar.gz -w /output"
 
 docker-build:
 	cd docker ; docker build -t $(IMAGENAME) .
