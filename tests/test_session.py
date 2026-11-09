@@ -2,6 +2,9 @@ import asyncio
 import errno
 import gc
 import resource
+from contextlib import closing
+from unittest.mock import Mock
+from weakref import WeakKeyDictionary
 
 import pytest
 
@@ -94,9 +97,50 @@ def test_when_snmp_version_is_invalid_it_should_raise_valueerror():
         session.SNMPSession(host="localhost", port=161, version=666, community="public")
 
 
+def test_when_session_is_closed_outside_running_loop_then_requests_on_a_new_session_reusing_its_fd_should_not_time_out(
+    snmpsim, snmp_test_port, private_event_loop
+):
+    netsnmp.load_mibs()
+    sys_uptime = netsnmp.symbol_to_oid("SNMPv2-MIB::sysUpTime.0")
+    with closing(_open_localhost_session(snmp_test_port)) as first:
+        first_fds, _ = netsnmp.snmp_select_info2()
+        private_event_loop.run_until_complete(first.aget(sys_uptime))
+    # first is now closed, while no event loop is running
+
+    with closing(_open_localhost_session(snmp_test_port)) as second:
+        second_fds, _ = netsnmp.snmp_select_info2()
+        assert second_fds == first_fds, "second session did not reuse the fd"
+        private_event_loop.run_until_complete(second.aget(sys_uptime))
+
+
+async def test_when_event_loop_refuses_to_monitor_an_fd_then_it_should_not_be_recorded_as_monitored(
+    monkeypatch,
+):
+    unusable_fd = 4242
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(session, "_loop_fd_map", WeakKeyDictionary())
+    monkeypatch.setattr(session, "snmp_select_info2", lambda: ([unusable_fd], None))
+    monkeypatch.setattr(
+        loop, "add_reader", Mock(side_effect=OSError(errno.EBADF, "Bad fd"))
+    )
+
+    with pytest.raises(OSError):
+        session.update_event_loop()
+
+    assert unusable_fd not in session._loop_fd_map.get(loop, {})
+
+
 #
 # Fixtures
 #
+
+
+@pytest.fixture
+def private_event_loop():
+    """Provides an event loop that runs only when a test explicitly runs it"""
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
 
 
 @pytest.fixture
@@ -169,3 +213,11 @@ async def test_session_close_should_cancel_all_pending_requests():
 
     # Verify that the session has no pending futures
     assert len(sess._futures) == 0
+
+
+def _open_localhost_session(port: int) -> session.SNMPSession:
+    sess = session.SNMPSession(
+        host="localhost", port=port, version=2, timeout=1, retries=0
+    )
+    sess.open()
+    return sess
