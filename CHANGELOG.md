@@ -11,6 +11,13 @@ changes for the upcoming release can be found in
 
 <!-- towncrier release notes start -->
 
+## [0.2.2] - 2026-11-09
+
+### Fixed
+
+- Fix requests timing out on a new session if an earlier session was closed while no asyncio event loop was running. The new session could be given the old session's socket number, and netsnmpy would wrongly assume the event loop was already watching it. ([#32](https://github.com/Uninett/netsnmp-cffi/issues/32))
+
+
 ## [0.2.1] - 2026-06-19
 
 ### Fixed
