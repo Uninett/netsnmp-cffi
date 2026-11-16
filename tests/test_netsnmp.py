@@ -125,6 +125,21 @@ class TestSNMPVariableStr:
 
         assert str(variable) == "IF-MIB::ifAlias.1 = None"
 
+    def test_when_displaystring_value_is_not_utf8_it_should_print_it_decoded_as_latin1(  # noqa: E501
+        self,
+    ):
+        variable = SNMPVariable(IF_ALIAS_1, "Bjølsen".encode("latin-1"))
+
+        assert str(variable) == "IF-MIB::ifAlias.1 = 'Bjølsen'"
+
+
+class TestDecodeDisplayString:
+    def test_when_value_is_utf8_it_should_decode_it_as_utf8(self):
+        assert netsnmp.decode_display_string("Bjølsen".encode("utf-8")) == "Bjølsen"
+
+    def test_when_value_is_not_utf8_it_should_decode_it_as_latin1(self):
+        assert netsnmp.decode_display_string("Bjølsen".encode("latin-1")) == "Bjølsen"
+
 
 IF_ALIAS_1 = OID(".1.3.6.1.2.1.31.1.1.1.18.1")
 
