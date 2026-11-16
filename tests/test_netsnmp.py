@@ -4,6 +4,13 @@ import pytest
 
 from netsnmpy import netsnmp
 from netsnmpy.constants import LOG_EMERG, LOG_WARNING
+from netsnmpy.netsnmp import (
+    EndOfMibView,
+    NoSuchInstance,
+    NoSuchObject,
+    SNMPVariable,
+)
+from netsnmpy.oids import OID
 
 
 def test_when_netsnmp_debug_logging_is_enabled_load_mibs_should_log_debug_msgs(caplog):
@@ -78,3 +85,50 @@ class TestDecodeString:
         varbind.val_len = len(bitstring)
 
         assert netsnmp.decode_string(varbind) == bitstring
+
+
+@pytest.mark.usefixtures("loaded_mibs")
+class TestSNMPVariableStr:
+    def test_when_displaystring_value_is_bytes_it_should_print_decoded_string(self):
+        variable = SNMPVariable(IF_ALIAS_1, b"uplink")
+
+        assert str(variable) == "IF-MIB::ifAlias.1 = 'uplink'"
+
+    @pytest.mark.parametrize(
+        "error_value, description",
+        [
+            (
+                NoSuchObject(),
+                "No Such Object available on this agent at this OID",
+            ),
+            (
+                NoSuchInstance(),
+                "No such instance currently exists at this OID",
+            ),
+            (
+                EndOfMibView(),
+                "No more variables left in this MIB View"
+                " (It is past the end of the MIB tree)",
+            ),
+        ],
+        ids=["NoSuchObject", "NoSuchInstance", "EndOfMibView"],
+    )
+    def test_when_displaystring_value_is_an_exception_value_it_should_print_its_description(  # noqa: E501
+        self, error_value, description
+    ):
+        variable = SNMPVariable(IF_ALIAS_1, error_value)
+
+        assert str(variable) == f"IF-MIB::ifAlias.1 = {description}"
+
+    def test_when_displaystring_value_is_none_it_should_print_none(self):
+        variable = SNMPVariable(IF_ALIAS_1, None)
+
+        assert str(variable) == "IF-MIB::ifAlias.1 = None"
+
+
+IF_ALIAS_1 = OID(".1.3.6.1.2.1.31.1.1.1.18.1")
+
+
+@pytest.fixture(scope="module")
+def loaded_mibs():
+    netsnmp.load_mibs()
