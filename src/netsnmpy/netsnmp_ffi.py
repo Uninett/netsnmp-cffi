@@ -207,7 +207,9 @@ void   netsnmp_large_fd_setfd( int fd, netsnmp_large_fd_set *fdset);
 
 int                  snmp_register_callback(int major, int minor, SNMPCallback * new_callback, void *arg);
 netsnmp_log_handler *netsnmp_register_loghandler( int type, int pri );
+int                  snmp_log(int priority, const char *format, ...);
 void                 snmp_set_do_debugging(int);
+int                  snmp_get_do_debugging(void);
 extern "Python" int  python_log_callback(int, int, void*, void*);
 
 /* Error handling functions */

@@ -435,6 +435,7 @@ LOG_LEVEL_MAP = {
     LOG_INFO: logging.INFO,
     LOG_DEBUG: logging.DEBUG,
 }
+_log_callback_registered = False
 
 
 @_ffi.def_extern()
@@ -447,12 +448,26 @@ def python_log_callback(_major_id, _minor_id, serverarg, _clientarg):
     return 0
 
 
-def register_log_callback(enable_debug=False):
+def register_log_callback(enable_debug: bool = False) -> None:
     """Registers a log callback with Net-SNMP to ensure log messages are emitted
     through Python's logging module.
 
+    Only the first call registers the callback.
+    Later calls can still enable debugging, but never disable it.
+
     :param enable_debug: If True, enables full debug logging from Net-SNMP.
     """
+    global _log_callback_registered
+    # Registering again would emit every log message more than once.
+    # With debugging enabled, it would also deadlock inside Net-SNMP.
+    if not _log_callback_registered:
+        _register_log_handler()
+        _log_callback_registered = True
+    if enable_debug:
+        _lib.snmp_set_do_debugging(1)
+
+
+def _register_log_handler() -> None:
     _lib.snmp_register_callback(
         SNMP_CALLBACK_LIBRARY,
         SNMP_CALLBACK_LOGGING,
@@ -461,8 +476,6 @@ def register_log_callback(enable_debug=False):
     )
 
     _lib.netsnmp_register_loghandler(NETSNMP_LOGHANDLER_CALLBACK, LOG_DEBUG)
-    if enable_debug:
-        _lib.snmp_set_do_debugging(1)
 
 
 def get_session_error_message(session: _ffi.CData) -> str:
