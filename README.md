@@ -14,7 +14,7 @@ SNMPv3 is not implemented yet).
 ## Compatibility
 
 The library is intended to be compatible with Net-SNMP versions from 5.9 and
-newer, and with Python 3.9 and newer.
+newer, and with Python 3.11 and newer.
 
 ## Usage examples
 
