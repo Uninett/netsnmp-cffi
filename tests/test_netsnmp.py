@@ -3,7 +3,7 @@ import logging
 import pytest
 
 from netsnmpy import netsnmp
-from netsnmpy.constants import LOG_EMERG
+from netsnmpy.constants import LOG_EMERG, LOG_WARNING
 
 
 def test_when_netsnmp_debug_logging_is_enabled_load_mibs_should_log_debug_msgs(caplog):
@@ -33,6 +33,27 @@ def test_when_log_callback_is_already_registered_enable_debug_should_still_enabl
     netsnmp.register_log_callback(enable_debug=True)
 
     assert netsnmp._lib.snmp_get_do_debugging()
+
+
+def test_when_netsnmp_logs_a_warning_it_should_be_emitted_through_python_logging(
+    caplog,
+):
+    with caplog.at_level(logging.DEBUG):
+        netsnmp.register_log_callback()
+        _netsnmp_log(LOG_WARNING, "netsnmpy test warning")
+
+    assert ("netsnmpy.netsnmp", logging.WARNING, "netsnmpy test warning") in (
+        caplog.record_tuples
+    )
+
+
+def test_when_probing_log_filtering_it_should_receive_but_not_emit_the_probe(caplog):
+    netsnmp.register_log_callback()
+    with caplog.at_level(logging.DEBUG):
+        received = netsnmp._debug_messages_reach_log_callback()
+
+    assert received
+    assert netsnmp._LOG_PROBE_MESSAGE not in caplog.text
 
 
 @pytest.fixture

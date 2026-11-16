@@ -189,7 +189,10 @@ struct snmp_log_message {{
 }};
 typedef int (SNMPCallback) (int majorID, int minorID,
                             void *serverarg, void *clientarg);
-typedef struct {{ ...; }} netsnmp_log_handler;
+typedef struct {{
+    int pri_max;
+    ...;
+}} netsnmp_log_handler;
 
 
 /* Function prototypes we will be needing access to */

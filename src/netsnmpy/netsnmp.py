@@ -436,15 +436,22 @@ LOG_LEVEL_MAP = {
     LOG_DEBUG: logging.DEBUG,
 }
 _log_callback_registered = False
+_LOG_PROBE_MESSAGE = "netsnmpy: probing log handler priority filtering"
+_log_probe_received = False
 
 
 @_ffi.def_extern()
 def python_log_callback(_major_id, _minor_id, serverarg, _clientarg):
     """Callback function to emit Net-SNMP log messages through Python's logging module"""
+    global _log_probe_received
     log_message = _ffi.cast("struct snmp_log_message *", serverarg)
+    message = _ffi.string(log_message.msg).decode("utf-8").rstrip()
+    if message == _LOG_PROBE_MESSAGE:
+        _log_probe_received = True
+        return 0
+
     level = LOG_LEVEL_MAP.get(log_message.priority, logging.DEBUG)
-    message = _ffi.string(log_message.msg).decode("utf-8")
-    _log.log(level, message.rstrip())
+    _log.log(level, message)
     return 0
 
 
@@ -475,7 +482,32 @@ def _register_log_handler() -> None:
         _ffi.NULL,
     )
 
-    _lib.netsnmp_register_loghandler(NETSNMP_LOGHANDLER_CALLBACK, LOG_DEBUG)
+    handler = _lib.netsnmp_register_loghandler(NETSNMP_LOGHANDLER_CALLBACK, LOG_DEBUG)
+    if handler == _ffi.NULL:
+        raise MemoryError("Could not register a Net-SNMP log handler")
+    if not _debug_messages_reach_log_callback():
+        handler.pri_max = LOG_DEBUG
+
+
+def _debug_messages_reach_log_callback() -> bool:
+    """Logs a probe message at `LOG_DEBUG` and reports whether our callback got it.
+
+    `netsnmp_register_loghandler()` leaves a handler's `pri_max` at 0 (`LOG_EMERG`).
+    Most Net-SNMP versions pass a message on when `priority >= pri_max`.
+    With 0, that lets every message through.
+    The 5.9.5.x releases reversed the comparison to `priority <= pri_max`
+    (upstream commit db0f7f83).
+    With 0, that blocks everything but `LOG_EMERG`.
+    Upstream restored the original comparison for 5.10 (commit c86ebde3).
+    Distros may backport either change, so probing beats checking the version.
+
+    Any other enabled Net-SNMP log handler, such as stderr, also sees the probe.
+    """
+    global _log_probe_received
+    _log_probe_received = False
+    probe = _ffi.new("char[]", _LOG_PROBE_MESSAGE.encode("utf-8"))
+    _lib.snmp_log(LOG_DEBUG, b"%s\n", probe)
+    return _log_probe_received
 
 
 def get_session_error_message(session: _ffi.CData) -> str:
