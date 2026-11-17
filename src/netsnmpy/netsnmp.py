@@ -200,7 +200,7 @@ class SNMPVariable(NamedTuple):
         elif isinstance(self.value, bytes) and (
             self.textual_convention == "DisplayString"
         ):
-            value = f"{self.value.decode('utf-8')!r}"
+            value = f"{decode_display_string(self.value)!r}"
         else:
             value = self.value
         return f"{self.symbolic_name} = {value}"
@@ -224,6 +224,20 @@ class SNMPVariable(NamedTuple):
     def symbolic_name(self) -> str:
         """Returns the symbolic name of the variable's OID"""
         return oid_to_symbol(self.oid)
+
+
+def decode_display_string(value: bytes) -> str:
+    """Decodes a raw DisplayString byte value, tolerating invalid UTF-8.
+
+    DisplayString is defined as 7-bit ASCII, but devices often hold whatever bytes
+    were typed into them. Values that are not valid UTF-8 are decoded as Latin-1.
+    Latin-1 maps every possible byte to a character, so this fallback cannot fail.
+    It can still misread the value, though, if the device used another encoding.
+    """
+    try:
+        return value.decode("utf-8")
+    except UnicodeDecodeError:
+        return value.decode("latin-1")
 
 
 def decode_oid(var: _ffi.CData) -> tuple[int]:
