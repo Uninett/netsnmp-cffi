@@ -11,7 +11,7 @@ SDISTDIR := build/sdist
 
 all: build
 
-build: dist docker-build sdist py39 py310 py311 py312 py313 py314
+build: dist docker-build sdist py311 py312 py313 py314
 	docker run -u $(UID) -v $(PWD):/src -v $(PWD)/dist:/output $(IMAGENAME) /bin/bash -c "auditwheel repair /output/netsnmp_cffi**-linux*whl -w /output"
 
 sdist: dist
